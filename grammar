@@ -1,5 +1,5 @@
-program -> program identifier SEMICOLON block DOT
-block -> var_declaration_part  function_declaration_list  body
+program -> program identifier SEMICOLON body DOT
+body -> var_declaration_part  function_declaration_list block
 
 var_declaration_part -> VAR var_declaration_list SEMICOLON | 
 var_declaration_list -> var_declaration | var_declaration SEMICOLON var_declaration_list
@@ -8,15 +8,14 @@ identifier_list -> identifier | identifier COMMA identifier_list
 
 function_declaration_list -> function_declaration | function_declaration  function_declaration_list |    
 function_declaration -> function_heading SEMICOLON blockSEMICOLON
-function_heading -> FUNCTION identifier parameter_list COLON type
+function_heading -> FUNCTION identifier parameter_list COLON simple_type
 parameter_list -> LPAREN parameter_part RPAREN |
-parameter_part -> parameter_definition | parameter_definition SEMICOLON parameter_part
-parameter_definition -> VAR parameter | parameter
-parameter -> identifier_list COLON type
+parameter_part -> parameter | parameter SEMICOLON parameter_part
+parameter -> identifier_list COLON simple_type
 
-body -> BEGIN statement_list END 
-statement_list -> statement SEMICOLON statement_list | statement
-statement -> if_statement | for_statement | while_statement | assignment_statement | body
+block -> BEGIN statement_list END 
+statement_list -> statement SEMICOLON statement_list | statement |
+statement -> if_statement | for_statement | while_statement | assignment_statement | block
 
 if_statement -> if_then_statement | if_then_statement else_part
 if_then_statement -> IF expression THEN statement
@@ -24,10 +23,11 @@ else_part -> ELSE statement
 
 while_statement -> WHILE expression DO statement
 
-for_statement -> FOR assignment direction expression DO statement
+for_statement -> FOR assignment_statement direction expression DO statement
 direction -> TO | DOWNTO
 
-assignment_statement -> identifier COLON= expression
+qualified_name -> variable_identifier | variable_identifier LBRACKET expression_list RBRACKET
+assignment_statement -> qualified_name COLON= expression
 
 expression -> simple_expression | simple_expression cmp_op simple_expression
 cmp_op ->  >= | <= | = | <> | > | <
@@ -37,12 +37,18 @@ sign -> + | -
 opt_sign -> sign | 
 or_sign -> sign | or
 
-term -> factor | factor op factor
+term -> factor | factor op term
 op -> * | / | div | mod | and
 
-factor -> unsigned_number | variable_identifier | variable_identifier LBRACKET expression_list RBRACKET | function_identifier LPAREN expression_list RPAREN | LPAREN expression RPAREN | not factor
-expression_list -> expression | expression COMMA expression_list
+factor -> unsigned_number 
+	| qualified_name
+	| function_identifier LPAREN expression_list RPAREN
+	| LPAREN expression RPAREN
+	| NOT factor
+	| read_factor
+	| write_factor
 
+expression_list -> expression | expression COMMA expression_list
 read_factor -> read LPAREN identifier_list RPAREN
 write_factor -> write LPAREN expression RPAREN 
 
