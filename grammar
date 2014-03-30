@@ -1,62 +1,64 @@
-program -> program identifier SEMICOLON body DOT
-body -> var_declaration_part  function_declaration_list block
+program -> PROGRAM identifier SEMICOLON body DOT
+body -> var_declaration_part function_declaration_list block
 
 var_declaration_part -> VAR var_declaration_list SEMICOLON | 
 var_declaration_list -> var_declaration | var_declaration SEMICOLON var_declaration_list
 var_declaration -> identifier_list COLON type   
 identifier_list -> identifier | identifier COMMA identifier_list
 
-function_declaration_list -> function_declaration | function_declaration  function_declaration_list |    
-function_declaration -> function_heading SEMICOLON blockSEMICOLON
+function_declaration_list -> function_declaration function_declaration_list |
+function_declaration -> function_heading SEMICOLON block SEMICOLON
 function_heading -> FUNCTION identifier parameter_list COLON simple_type
 parameter_list -> LPAREN parameter_part RPAREN |
 parameter_part -> parameter | parameter SEMICOLON parameter_part
 parameter -> identifier_list COLON simple_type
 
-block -> BEGIN statement_list END 
-statement_list -> statement SEMICOLON statement_list | statement |
-statement -> if_statement | for_statement | while_statement | assignment_statement | block
+block -> BEGIN statement_list END
+function_call ->  identifier LPAREN expression_list RPAREN
+qualified_name -> variable_identifier | variable_identifier LBRACKET expression_list RBRACKET
 
-if_statement -> if_then_statement | if_then_statement else_part
-if_then_statement -> IF expression THEN statement
-else_part -> ELSE statement
+statement_list -> statement SEMICOLON statement_list | statement |
+statement -> if_statement
+        | for_statement
+        | while_statement
+        | assignment_statement
+        | block
+        | function_call
+        | READ LPAREN identifier_list RPAREN
+        | WRITE LPAREN expression_list RPAREN
+        | BREAK
+        | CONTINUE
+
+if_statement -> IF expression THEN statement else_part
+else_part -> ELSE statement |
 
 while_statement -> WHILE expression DO statement
 
 for_statement -> FOR assignment_statement direction expression DO statement
 direction -> TO | DOWNTO
 
-qualified_name -> variable_identifier | variable_identifier LBRACKET expression_list RBRACKET
 assignment_statement -> qualified_name COLON= expression
 
-expression -> simple_expression | simple_expression cmp_op simple_expression
-cmp_op ->  >= | <= | = | <> | > | <
+expression -> app_term | app_term cmp_op app_term
+expression_list -> expression | expression COMMA expression_list
 
-simple_expression -> opt_sign term | opt_sign term or_sign term
-sign -> + | -
+app_term -> opt_sign mul_term| opt_sign mul_term app_op mul_term
 opt_sign -> sign | 
-or_sign -> sign | or
+app_op -> sign | or
 
-term -> factor | factor op term
-op -> * | / | div | mod | and
+mul_term-> factor | factor mul_op term
 
 factor -> unsigned_number 
 	| qualified_name
-	| function_identifier LPAREN expression_list RPAREN
+	| function_call
 	| LPAREN expression RPAREN
 	| NOT factor
-	| read_factor
-	| write_factor
-
-expression_list -> expression | expression COMMA expression_list
-read_factor -> read LPAREN identifier_list RPAREN
-write_factor -> write LPAREN expression RPAREN 
-
+	
 type -> simple_type | array_type
 simple_type -> integer
-array_type -> array LBRACKET range_list RBRACKET of simple_type 
+array_type -> ARRAY LBRACKET range_list RBRACKET OF simple_type
 range_list -> range | range COMMA range_list
-range -> opt_sign unsigned_number .. opt_sign unsigned_number
+range -> unsigned_number .. unsigned_number
 
 SEMICOLON -> ;
 COMMA -> ,
@@ -67,5 +69,8 @@ LPAREN -> (
 RPAREN -> )
 LBRACKET -> [
 RBRACKET -> ]
+sign -> + | -
+cmp_op ->  >= | <= | = | <> | > | <
+mul_op -> * | / | DIV | MOD | AND
 identifier -> [a-zA-Z][a-zA-Z0-9]*
 unsigned_number -> [0-9]+
