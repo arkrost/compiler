@@ -7,7 +7,7 @@ var_declaration -> identifier_list COLON type
 identifier_list -> identifier | identifier COMMA identifier_list
 
 function_declaration_list -> function_declaration function_declaration_list |
-function_declaration -> function_heading SEMICOLON block SEMICOLON
+function_declaration -> function_heading SEMICOLON var_declaration_part block SEMICOLON
 function_heading -> FUNCTION identifier parameter_list COLON simple_type
 parameter_list -> LPAREN parameter_part RPAREN |
 parameter_part -> parameter | parameter SEMICOLON parameter_part
@@ -17,7 +17,7 @@ block -> BEGIN statement_list END
 function_call ->  identifier LPAREN expression_list RPAREN
 qualified_name -> variable_identifier | variable_identifier LBRACKET expression_list RBRACKET
 
-statement_list -> statement SEMICOLON statement_list | statement |
+statement_list -> statement SEMICOLON statement_list |
 statement -> if_statement
         | for_statement
         | while_statement
@@ -42,11 +42,11 @@ assignment_statement -> qualified_name COLON= expression
 expression -> app_term | app_term cmp_op app_term
 expression_list -> expression | expression COMMA expression_list
 
-app_term -> opt_sign mul_term| opt_sign mul_term app_op mul_term
+app_term -> opt_sign mul_term| opt_sign mul_term app_op app_term
 opt_sign -> sign | 
 app_op -> sign | or
 
-mul_term-> factor | factor mul_op term
+mul_term-> factor | factor mul_op mul_term
 
 factor -> unsigned_number 
 	| qualified_name
