@@ -1,7 +1,8 @@
 grammar Pascal;
 
 program : 'program' ID ';' body '.' ;
-body    : var_declaration_part function_declaration_part block ;
+body    : var_declaration_part function_declaration_part main ;
+main    : block ;
 
 var_declaration_part    : ('var' (var_declaration ';')+ )? ;
 var_declaration         : ID (',' ID)* ':' type ;
@@ -31,7 +32,7 @@ statement   : 'if' expression 'then' statement ('else' statement)?
             | 'continue' ;
 
 expression  : app_term (CMP_OP app_term)* ;
-app_term    : SIGN? mul_term ((SIGN | 'or') mul_term)* ;
+app_term    : SIGN? mul_term (SIGN mul_term)* ;
 mul_term    : factor (MUL_OP factor)* ;
 
 factor      : NUMBER
@@ -44,10 +45,9 @@ type    : PRIMITIVE_TYPE | 'array' '[' range (',' range)* ']' 'of' PRIMITIVE_TYP
 range   : NUMBER '..' NUMBER ;
 PRIMITIVE_TYPE  : 'integer' ;
 
-
 SIGN        : '+' | '-' ;
 CMP_OP      : '>=' | '<=' | '=' | '<>' | '>' | '<' ;
-MUL_OP      : '*' | '/' | 'div' | 'mod' | 'and' ;
+MUL_OP      : '*' | '/' | 'div' | 'mod';
 ID          : [a-zA-Z][a-zA-Z0-9]* ;
 NUMBER      : [0-9]+ ;
 WS          : [ \t\r\n]+ -> skip ;
