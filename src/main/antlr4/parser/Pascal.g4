@@ -1,8 +1,7 @@
 grammar Pascal;
 
 program : 'program' ID ';' body '.' ;
-body    : var_declaration_part function_declaration_part main ;
-main    : block ;
+body    : var_declaration_part function_declaration_part block ;
 
 var_declaration_part    : ('var' (var_declaration ';')+ )? ;
 var_declaration         : ID (',' ID)* ':' type ;
