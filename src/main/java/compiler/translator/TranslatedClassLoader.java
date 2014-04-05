@@ -1,4 +1,4 @@
-package translator;
+package compiler.translator;
 
 /**
  * @author Arkady Rost
