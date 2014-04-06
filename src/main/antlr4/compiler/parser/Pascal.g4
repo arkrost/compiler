@@ -15,7 +15,6 @@ function_declaration        :
 block           : 'begin' (statement ';')* 'end' ;
 function_call   : ID '(' expression (',' expression)* ')' ;
 qualified_name  : ID ('[' expression (',' expression)* ']')? ;
-assignment_statement    : qualified_name ':=' expression ;
 
 statement   : if_statement
             | for_statement
@@ -30,8 +29,9 @@ statement   : if_statement
 
 if_statement        : 'if' expression 'then' statement else_part? ;
 else_part           : 'else' statement ;
-for_statement       : 'for' assignment_statement ('to' | 'downto') expression 'do' statement ;
+for_statement       : 'for' assignment_statement DIRECTION expression 'do' statement ;
 while_statement     : 'while' expression 'do' statement ;
+assignment_statement: qualified_name ':=' expression ;
 read_statement      : 'read' '(' ID (',' ID)* ')' ;
 write_statement     : 'write' '(' expression (',' expression)* ')' ;
 break_statement     : 'break' ;
@@ -50,6 +50,7 @@ type    : PRIMITIVE_TYPE | 'array' '[' range (',' range)* ']' 'of' PRIMITIVE_TYP
 range   : NUMBER '..' NUMBER ;
 PRIMITIVE_TYPE  : 'integer' ;
 
+DIRECTION   : 'to' | 'downto' ;
 SIGN        : '+' | '-' ;
 CMP_OP      : '>=' | '<=' | '=' | '<>' | '>' | '<' ;
 MUL_OP      : '*' | '/' | 'div' | 'mod';

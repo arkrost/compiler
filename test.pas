@@ -3,5 +3,6 @@ var
  i, j : integer;
  a : array [1 .. 20, 3 .. 5] of integer;
 begin
-    if (3 > 4) then  write(a[0, 5]);
+    for i := 10 downto 1 do
+        for a[4, 4] := 1 to i do write(i * a[4,4]);
 end.

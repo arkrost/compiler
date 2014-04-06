@@ -7,7 +7,6 @@ import compiler.translator.type.ArrayType;
 import compiler.translator.type.DataType;
 import compiler.translator.type.PrimitiveType;
 import compiler.translator.type.Range;
-import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
@@ -42,7 +41,7 @@ public class TranslateVisitor {
         scope = new TranslateScope();
     }
 
-    private void visitProgram(@NotNull ProgramContext ctx) {
+    private void visitProgram(ProgramContext ctx) {
         cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
         String name = capitalize(ctx.ID().getText());
         scope.setClassName(name);
@@ -56,7 +55,7 @@ public class TranslateVisitor {
         return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 
-    private void visitBody(@NotNull BodyContext ctx) {
+    private void visitBody(BodyContext ctx) {
         visitGlobalVarDeclarations(ctx.var_declaration_part());
         visitFunctionDeclarations(ctx.function_declaration_part());
 
@@ -185,7 +184,64 @@ public class TranslateVisitor {
     }
 
     private void visitFor(For_statementContext ctx) {
-        throw new CompileException("Unsupported statement: " + ctx.getText());
+        visitAssignment(ctx.assignment_statement());
+        Label startLabel = new Label();
+        Label endLabel = new Label();
+        Label continueLabel = new Label();
+        boolean to = "to".equals(ctx.DIRECTION().getText());
+        mv.visitLabel(startLabel);
+        visitExpression(ctx.expression());
+        visitQualifiedName(ctx.assignment_statement().qualified_name());
+        mv.visitJumpInsn(to ? IF_ICMPLT : IF_ICMPGT, endLabel);
+        visitStatement(ctx.statement());
+        mv.visitLabel(continueLabel);
+        updateForCounter(ctx.assignment_statement().qualified_name(), to);
+        mv.visitJumpInsn(GOTO, startLabel);
+        mv.visitLabel(endLabel);
+    }
+
+    private void updateForCounter(Qualified_nameContext ctx, boolean to) {
+        if (ctx.expression().isEmpty()) {
+            updateForVariableCounter(ctx, to);
+        } else {
+            updateForArrayCellCounter(ctx, to);
+        }
+    }
+
+    private void updateForArrayCellCounter(Qualified_nameContext ctx, boolean to) {
+        ArrayType type = loadArray(ctx.ID().getText());
+        computeArrayIndex(type, ctx);
+        updateCounterValue(ctx, to);
+        mv.visitInsn(IASTORE);
+    }
+
+    private void updateCounterValue(Qualified_nameContext ctx, boolean to) {
+        visitQualifiedName(ctx);
+        mv.visitInsn(to ? ICONST_1 : ICONST_M1);
+        mv.visitInsn(IADD);
+    }
+
+    private ArrayType loadArray(String var) {
+        ArrayType type;
+        if (scope.isGlobalVariable(var)) {
+            checkArrayType(scope.getGlobalVariableType(var));
+            type = (ArrayType)scope.getGlobalVariableType(var);
+            mv.visitFieldInsn(GETSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
+        } else {
+            throw new CompileException("Local assignments are not supported yet.");
+        }
+        return type;
+    }
+
+    private void updateForVariableCounter(Qualified_nameContext ctx, boolean to) {
+        String var = ctx.ID().getText();
+        if (scope.isGlobalVariable(var)) {
+            DataType type = scope.getGlobalVariableType(var);
+            updateCounterValue(ctx, to);
+            mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
+        } else {
+            throw new CompileException("Local assignments are not supported yet.");
+        }
     }
 
     private void visitWhile(While_statementContext ctx) {
@@ -212,15 +268,7 @@ public class TranslateVisitor {
     }
 
     private void visitArrayAssignment(Qualified_nameContext nctx, ExpressionContext ctx) {
-        String var = nctx.ID().getText();
-        ArrayType type;
-        if (scope.isGlobalVariable(var)) {
-            checkArrayType(scope.getGlobalVariableType(var));
-            type = (ArrayType)scope.getGlobalVariableType(var);
-            mv.visitFieldInsn(GETSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
-        } else {
-            throw new CompileException("Local assignments are not supported yet.");
-        }
+        ArrayType type = loadArray(nctx.ID().getText());
         computeArrayIndex(type, nctx);
         visitExpression(ctx);
         mv.visitInsn(IASTORE);
