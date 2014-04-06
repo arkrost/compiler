@@ -245,7 +245,14 @@ public class TranslateVisitor {
     }
 
     private void visitWhile(While_statementContext ctx) {
-        throw new CompileException("Unsupported statement: " + ctx.getText());
+        Label continueLabel = new Label();
+        Label endLabel = new Label();
+        mv.visitLabel(continueLabel);
+        visitExpression(ctx.expression());
+        mv.visitJumpInsn(IFEQ, endLabel);
+        visitStatement(ctx.statement());
+        mv.visitJumpInsn(GOTO, continueLabel);
+        mv.visitLabel(endLabel);
     }
 
     private void visitAssignment(Assignment_statementContext ctx) {
