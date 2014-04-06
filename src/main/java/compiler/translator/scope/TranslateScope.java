@@ -38,4 +38,12 @@ public class TranslateScope implements Scope {
     public Map<String, DataType> getGlobalVariables() {
         return Collections.unmodifiableMap(global);
     }
+
+    public boolean isGlobalVariable(String name) {
+        return global.containsKey(name);
+    }
+
+    public DataType getGlobalVariableType(String name) {
+        return global.get(name);
+    }
 }

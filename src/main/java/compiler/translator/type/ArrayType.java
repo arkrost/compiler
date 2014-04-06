@@ -17,6 +17,10 @@ public class ArrayType implements DataType {
         return dimensions;
     }
 
+    public Range getDimension(int i) {
+        return dimensions[i];
+    }
+
     @Override
     public Type getType() {
         return type;

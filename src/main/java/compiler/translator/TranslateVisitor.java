@@ -10,7 +10,9 @@ import compiler.translator.type.Range;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Type;
 
 import java.util.List;
 import java.util.Map;
@@ -60,9 +62,6 @@ public class TranslateVisitor {
 
         // entry point
         mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, "main", "([Ljava/lang/String;)V", null, null);
-        mv.visitFieldInsn(GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
-        mv.visitLdcInsn("hello");
-        mv.visitMethodInsn(INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
 
         visitBlock(ctx.block());
 
@@ -134,7 +133,7 @@ public class TranslateVisitor {
     }
 
     private void visitFunctionDeclarations(Function_declaration_partContext ctx) {
-        for (Function_declarationContext fctx: ctx.function_declaration())
+        for (Function_declarationContext fctx : ctx.function_declaration())
             visitFunctionDeclaration(fctx);
     }
 
@@ -181,7 +180,77 @@ public class TranslateVisitor {
     }
 
     private void visitAssignment(Assignment_statementContext ctx) {
-        throw new CompileException("Unsupported statement: " + ctx.getText());
+        Qualified_nameContext nctx = ctx.qualified_name();
+        if (nctx.expression().isEmpty()) {
+            visitVariableAssignment(nctx.ID().getText(), ctx.expression());
+        } else {
+            visitArrayAssignment(nctx, ctx.expression());
+        }
+    }
+
+    private void visitVariableAssignment(String var, ExpressionContext ctx) {
+        visitExpression(ctx);
+        if (scope.isGlobalVariable(var)) {
+            DataType type = scope.getGlobalVariableType(var);
+            mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
+        } else {
+            throw new CompileException("Local assignments are not supported yet.");
+        }
+    }
+
+    private void visitArrayAssignment(Qualified_nameContext nctx, ExpressionContext ctx) {
+        String var = nctx.ID().getText();
+        ArrayType type;
+        if (scope.isGlobalVariable(var)) {
+            checkArrayType(scope.getGlobalVariableType(var));
+            type = (ArrayType)scope.getGlobalVariableType(var);
+            mv.visitFieldInsn(GETSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
+        } else {
+            throw new CompileException("Local assignments are not supported yet.");
+        }
+        computeArrayIndex(type, nctx);
+        visitExpression(ctx);
+        mv.visitInsn(IASTORE);
+    }
+
+    private void checkArrayType(DataType type) {
+        if (!(type instanceof ArrayType))
+            throw new CompileException("Not an array type: " + type);
+    }
+
+    private void computeArrayIndex(ArrayType type, Qualified_nameContext ctx) {
+        if (ctx.expression().size() != type.getDimensions().length) {
+            throw new CompileException(String.format("Arity exception. Got %d. Expected %d.",
+                    ctx.expression().size(), type.getDimensions().length));
+        }
+        String errorMessage = String.format("Index out of bound in access %s", ctx.getText());
+        for (int i = 0; i < ctx.expression().size(); i++) {
+            Label badLabel = new Label();
+            Label okLabel = new Label();
+            visitExpression(ctx.expression().get(i));
+            mv.visitInsn(DUP);
+            mv.visitLdcInsn(type.getDimension(i).getFrom());
+            mv.visitJumpInsn(IF_ICMPLT, badLabel);
+            mv.visitInsn(DUP);
+            mv.visitLdcInsn(type.getDimension(i).getTo());
+            mv.visitJumpInsn(IF_ICMPGT, badLabel);
+            mv.visitJumpInsn(GOTO, okLabel);
+            mv.visitLabel(badLabel);
+            mv.visitTypeInsn(NEW, Type.getInternalName(RuntimeException.class));
+            mv.visitInsn(DUP);
+            mv.visitLdcInsn(errorMessage);
+            mv.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(RuntimeException.class), "<init>",
+                    Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class)), false);
+            mv.visitInsn(ATHROW);
+            mv.visitLabel(okLabel);
+            mv.visitLdcInsn(type.getDimension(i).getFrom());
+            mv.visitInsn(ISUB);
+        }
+        for (int i = ctx.expression().size() - 2; i >= 0; i--) {
+            mv.visitLdcInsn(type.getDimension(i).getLength());
+            mv.visitInsn(IMUL);
+            mv.visitInsn(IADD);
+        }
     }
 
     private void visitBlock(BlockContext ctx) {
@@ -201,7 +270,7 @@ public class TranslateVisitor {
        for (ExpressionContext ectx : ctx.expression()) {
            mv.visitFieldInsn(GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
            visitExpression(ectx);
-           mv.visitMethodInsn(INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+           mv.visitMethodInsn(INVOKEVIRTUAL, "java/io/PrintStream", "println", "(I)V", false);
        }
     }
 
@@ -213,7 +282,91 @@ public class TranslateVisitor {
         throw new CompileException("Unsupported continue statement");
     }
 
-    private void visitExpression(ExpressionContext ectx) {
+    private void visitExpression(ExpressionContext ctx) {
+        visitAppTerm(ctx.app_term(0));
+        if (ctx.CMP_OP() != null) {
+            visitAppTerm(ctx.app_term(1));
+            Label endLabel = new Label();
+            Label falseLabel = new Label();
+            switch (ctx.CMP_OP().getText()) {
+                case ">=": mv.visitJumpInsn(IF_ICMPLT, falseLabel); break;
+                case "<=": mv.visitJumpInsn(IF_ICMPGT, falseLabel); break;
+                case "<>": mv.visitJumpInsn(IF_ICMPEQ, falseLabel); break;
+                case "=": mv.visitJumpInsn(IF_ICMPNE, falseLabel); break;
+                case ">": mv.visitJumpInsn(IF_ICMPLE, falseLabel); break;
+                case "<": mv.visitJumpInsn(IF_ICMPGE, falseLabel); break;
+                default:
+                    throw new CompileException("Unsupported compare operation: " + ctx.getText());
+            }
+            mv.visitInsn(ICONST_1);
+            mv.visitJumpInsn(GOTO, endLabel);
+            mv.visitLabel(falseLabel);
+            mv.visitInsn(ICONST_0);
+            mv.visitLabel(endLabel);
+        }
+    }
 
+    private void visitAppTerm(App_termContext ctx) {
+        if (ctx.SIGN().isEmpty()) {
+            visitMulTerm(ctx.mul_term(0));
+            return;
+        }
+        int i = 0;
+        if (ctx.mul_term().size() == ctx.SIGN().size()) {
+            mv.visitInsn(ICONST_0);
+        } else {
+            visitMulTerm(ctx.mul_term(i++));
+        }
+        for (TerminalNode op : ctx.SIGN()) {
+            visitMulTerm(ctx.mul_term(i++));
+            switch (op.getText()) {
+                case "+": mv.visitInsn(IADD); break;
+                case "-": mv.visitInsn(ISUB); break;
+            }
+        }
+    }
+
+    private void visitMulTerm(Mul_termContext ctx) {
+        visitFactor(ctx.factor(0));
+        if (!ctx.MUL_OP().isEmpty()) {
+            int i = 1;
+            for (TerminalNode op : ctx.MUL_OP()) {
+                visitFactor(ctx.factor(i++));
+                switch (op.getText()) {
+                    case "*": mv.visitInsn(IMUL); break;
+                    case "/": mv.visitInsn(IDIV); break;
+                }
+            }
+        }
+    }
+
+    private void visitFactor(FactorContext ctx) {
+        if (ctx.expression() != null) {
+            visitExpression(ctx.expression());
+        } else if (ctx.function_call() != null) {
+            visitFunctionCall(ctx.function_call());
+        } else if (ctx.qualified_name() != null) {
+            visitQualifiedName(ctx.qualified_name());
+        } else if (ctx.NUMBER() != null) {
+            mv.visitLdcInsn(Integer.parseUnsignedInt(ctx.NUMBER().getText()));
+        } else {
+            throw new CompileException("Unsupported expression " + ctx.getText());
+        }
+    }
+
+    private void visitQualifiedName(Qualified_nameContext ctx) {
+        String var = ctx.ID().getText();
+        DataType type;
+        if (scope.isGlobalVariable(var)) {
+             type = scope.getGlobalVariableType(var);
+            mv.visitFieldInsn(GETSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
+        } else {
+            throw new CompileException("Local variables are not supported yet.");
+        }
+        if (!ctx.expression().isEmpty()) {
+            checkArrayType(type);
+            computeArrayIndex((ArrayType)type, ctx);
+            mv.visitInsn(IALOAD);
+        }
     }
 }

@@ -21,6 +21,6 @@ public class Range {
     }
 
     public int getLength() {
-        return from - to;
+        return to - from + 1;
     }
 }
