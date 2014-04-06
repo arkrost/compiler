@@ -168,7 +168,20 @@ public class TranslateVisitor {
     }
 
     private void visitIf(If_statementContext ctx) {
-        throw new CompileException("Unsupported statement: " + ctx.getText());
+        visitExpression(ctx.expression());
+        Label endLabel = new Label();
+        if (ctx.else_part() == null) {
+            mv.visitJumpInsn(IFEQ, endLabel);
+            visitStatement(ctx.statement());
+        } else {
+            Label elseLabel = new Label();
+            mv.visitJumpInsn(IFEQ, elseLabel);
+            visitStatement(ctx.statement());
+            mv.visitJumpInsn(GOTO, endLabel);
+            mv.visitLabel(elseLabel);
+            visitStatement(ctx.else_part().statement());
+        }
+        mv.visitLabel(endLabel);
     }
 
     private void visitFor(For_statementContext ctx) {
