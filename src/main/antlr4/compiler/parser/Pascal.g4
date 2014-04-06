@@ -13,22 +13,28 @@ function_declaration        :
 
 
 block           : 'begin' (statement ';')* 'end' ;
-function_call   : ID '(' expression_list ')' ;
-qualified_name  : ID ('[' expression_list ']') ;
-expression_list : expression (',' expression)* ;
-
+function_call   : ID '(' expression (',' expression)* ')' ;
+qualified_name  : ID ('[' expression (',' expression)* ']') ;
 assignment_statement    : qualified_name ':=' expression ;
 
-statement   : 'if' expression 'then' statement ('else' statement)?
-            | 'for' assignment_statement ('to' | 'downto') expression 'do' statement
-            | 'while' expression 'do' statement
+statement   : if_statement
+            | for_statement
+            | while_statement
             | assignment_statement
             | block
             | function_call
-            | 'read' '(' ID (',' ID)* ')'
-            | 'write' '(' expression_list ')'
-            | 'break'
-            | 'continue' ;
+            | read_statement
+            | write_statement
+            | break_statement
+            | continue_statement ;
+
+if_statement        : 'if' expression 'then' statement ('else' statement)? ;
+for_statement       : 'for' assignment_statement ('to' | 'downto') expression 'do' statement ;
+while_statement     : 'while' expression 'do' statement ;
+read_statement      : 'read' '(' ID (',' ID)* ')' ;
+write_statement     : 'write' '(' expression (',' expression)* ')' ;
+break_statement     : 'break' ;
+continue_statement  : 'continue' ;
 
 expression  : app_term (CMP_OP app_term)* ;
 app_term    : SIGN? mul_term (SIGN mul_term)* ;
@@ -37,8 +43,7 @@ mul_term    : factor (MUL_OP factor)* ;
 factor      : NUMBER
             | qualified_name
             | function_call
-            | '(' expression ')'
-            | 'not' factor ;
+            | '(' expression ')' ;
 
 type    : PRIMITIVE_TYPE | 'array' '[' range (',' range)* ']' 'of' PRIMITIVE_TYPE ;
 range   : NUMBER '..' NUMBER ;

@@ -134,10 +134,86 @@ public class TranslateVisitor {
     }
 
     private void visitFunctionDeclarations(Function_declaration_partContext ctx) {
-        //todo implement
+        for (Function_declarationContext fctx: ctx.function_declaration())
+            visitFunctionDeclaration(fctx);
+    }
+
+    private void visitFunctionDeclaration(Function_declarationContext ctx) {
+        throw new CompileException("Function declarations aren't supported yet. " + ctx.getText());
+    }
+
+    private void visitStatement(StatementContext sctx) {
+        if (sctx.if_statement() != null) {
+            visitIf(sctx.if_statement());
+        } else if (sctx.for_statement() != null) {
+            visitFor(sctx.for_statement());
+        } else if (sctx.while_statement() != null) {
+            visitWhile(sctx.while_statement());
+        } else if (sctx.assignment_statement() != null) {
+            visitAssignment(sctx.assignment_statement());
+        } else if (sctx.block() != null) {
+            visitBlock(sctx.block());
+        }else if (sctx.function_call() != null) {
+            visitFunctionCall(sctx.function_call());
+        } else if (sctx.read_statement() != null) {
+            visitRead(sctx.read_statement());
+        } else if (sctx.write_statement() != null) {
+            visitWrite(sctx.write_statement());
+        } else if (sctx.break_statement() != null) {
+            visitBreak();
+        } else if (sctx.continue_statement() != null) {
+            visitContinue();
+        } else {
+            throw new CompileException("Unsupported statement: " + sctx.getText());
+        }
+    }
+
+    private void visitIf(If_statementContext ctx) {
+        throw new CompileException("Unsupported statement: " + ctx.getText());
+    }
+
+    private void visitFor(For_statementContext ctx) {
+        throw new CompileException("Unsupported statement: " + ctx.getText());
+    }
+
+    private void visitWhile(While_statementContext ctx) {
+        throw new CompileException("Unsupported statement: " + ctx.getText());
+    }
+
+    private void visitAssignment(Assignment_statementContext ctx) {
+        throw new CompileException("Unsupported statement: " + ctx.getText());
     }
 
     private void visitBlock(BlockContext ctx) {
-        //todo implement
+        for (StatementContext sctx : ctx.statement())
+            visitStatement(sctx);
+    }
+
+    private void visitFunctionCall(Function_callContext ctx) {
+        throw new CompileException("Unsupported statement: " + ctx.getText());
+    }
+
+    private void visitRead(Read_statementContext ctx) {
+        throw new CompileException("Unsupported statement: " + ctx.getText());
+    }
+
+    private void visitWrite(Write_statementContext ctx) {
+       for (ExpressionContext ectx : ctx.expression()) {
+           mv.visitFieldInsn(GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+           visitExpression(ectx);
+           mv.visitMethodInsn(INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+       }
+    }
+
+    private void visitBreak() {
+        throw new CompileException("Unsupported break statement");
+    }
+
+    private void visitContinue() {
+        throw new CompileException("Unsupported continue statement");
+    }
+
+    private void visitExpression(ExpressionContext ectx) {
+
     }
 }
