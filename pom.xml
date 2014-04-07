@@ -41,6 +41,7 @@
                         <phase>generate-sources</phase>
                         <configuration>
                             <listener>false</listener>
+                            <visitor>true</visitor>
                             <outputDirectory>src/main/java</outputDirectory>
                         </configuration>
                     </execution>

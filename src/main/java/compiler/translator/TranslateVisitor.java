@@ -56,8 +56,8 @@ public class TranslateVisitor {
     }
 
     private void visitBody(BodyContext ctx) {
-        visitGlobalVarDeclarations(ctx.var_declaration_part());
-        visitFunctionDeclarations(ctx.function_declaration_part());
+        visitGlobalVarDeclarations(ctx.varDeclarations());
+        visitFunctionDeclarations(ctx.functionDeclarations());
 
         // entry point
         mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, "main", "([Ljava/lang/String;)V", null, null);
@@ -69,13 +69,13 @@ public class TranslateVisitor {
         mv.visitEnd();
     }
 
-    private void visitGlobalVarDeclarations(Var_declaration_partContext ctx) {
-        for (Var_declarationContext vctx : ctx.var_declaration())
+    private void visitGlobalVarDeclarations(VarDeclarationsContext ctx) {
+        for (VarDeclarationContext vctx : ctx.varDeclaration())
             visitGlobalVarDeclaration(vctx);
         createConstructors();
     }
 
-    private void visitGlobalVarDeclaration(Var_declarationContext ctx) {
+    private void visitGlobalVarDeclaration(VarDeclarationContext ctx) {
         DataType type = getType(ctx.type());
         for (TerminalNode id : ctx.ID())
             declareField(id.getText(), type);
@@ -131,45 +131,45 @@ public class TranslateVisitor {
         cw.visitField(ACC_PRIVATE | ACC_STATIC, name, descriptor, null, value).visitEnd();
     }
 
-    private void visitFunctionDeclarations(Function_declaration_partContext ctx) {
-        for (Function_declarationContext fctx : ctx.function_declaration())
+    private void visitFunctionDeclarations(FunctionDeclarationsContext ctx) {
+        for (FunctionDeclarationContext fctx : ctx.functionDeclaration())
             visitFunctionDeclaration(fctx);
     }
 
-    private void visitFunctionDeclaration(Function_declarationContext ctx) {
+    private void visitFunctionDeclaration(FunctionDeclarationContext ctx) {
         throw new CompileException("Function declarations aren't supported yet. " + ctx.getText());
     }
 
     private void visitStatement(StatementContext sctx) {
-        if (sctx.if_statement() != null) {
-            visitIf(sctx.if_statement());
-        } else if (sctx.for_statement() != null) {
-            visitFor(sctx.for_statement());
-        } else if (sctx.while_statement() != null) {
-            visitWhile(sctx.while_statement());
-        } else if (sctx.assignment_statement() != null) {
-            visitAssignment(sctx.assignment_statement());
+        if (sctx.ifStatement() != null) {
+            visitIf(sctx.ifStatement());
+        } else if (sctx.forStatement() != null) {
+            visitFor(sctx.forStatement());
+        } else if (sctx.whileStatement() != null) {
+            visitWhile(sctx.whileStatement());
+        } else if (sctx.assignmentStatement() != null) {
+            visitAssignment(sctx.assignmentStatement());
         } else if (sctx.block() != null) {
             visitBlock(sctx.block());
-        }else if (sctx.function_call() != null) {
-            visitFunctionCall(sctx.function_call());
-        } else if (sctx.read_statement() != null) {
-            visitRead(sctx.read_statement());
-        } else if (sctx.write_statement() != null) {
-            visitWrite(sctx.write_statement());
-        } else if (sctx.break_statement() != null) {
+        }else if (sctx.functionCall() != null) {
+            visitFunctionCall(sctx.functionCall());
+        } else if (sctx.readStatement() != null) {
+            visitRead(sctx.readStatement());
+        } else if (sctx.writeStatement() != null) {
+            visitWrite(sctx.writeStatement());
+        } else if (sctx.breakStatement() != null) {
             visitBreak();
-        } else if (sctx.continue_statement() != null) {
+        } else if (sctx.continueStatement() != null) {
             visitContinue();
         } else {
             throw new CompileException("Unsupported statement: " + sctx.getText());
         }
     }
 
-    private void visitIf(If_statementContext ctx) {
+    private void visitIf(IfStatementContext ctx) {
         visitExpression(ctx.expression());
         Label endLabel = new Label();
-        if (ctx.else_part() == null) {
+        if (ctx.elsePart() == null) {
             mv.visitJumpInsn(IFEQ, endLabel);
             visitStatement(ctx.statement());
         } else {
@@ -178,29 +178,29 @@ public class TranslateVisitor {
             visitStatement(ctx.statement());
             mv.visitJumpInsn(GOTO, endLabel);
             mv.visitLabel(elseLabel);
-            visitStatement(ctx.else_part().statement());
+            visitStatement(ctx.elsePart().statement());
         }
         mv.visitLabel(endLabel);
     }
 
-    private void visitFor(For_statementContext ctx) {
-        visitAssignment(ctx.assignment_statement());
+    private void visitFor(ForStatementContext ctx) {
+        visitAssignment(ctx.assignmentStatement());
         Label startLabel = new Label();
         Label endLabel = new Label();
         Label continueLabel = new Label();
         boolean to = "to".equals(ctx.DIRECTION().getText());
         mv.visitLabel(startLabel);
         visitExpression(ctx.expression());
-        visitQualifiedName(ctx.assignment_statement().qualified_name());
+        visitQualifiedName(ctx.assignmentStatement().qualifiedName());
         mv.visitJumpInsn(to ? IF_ICMPLT : IF_ICMPGT, endLabel);
         visitStatement(ctx.statement());
         mv.visitLabel(continueLabel);
-        updateForCounter(ctx.assignment_statement().qualified_name(), to);
+        updateForCounter(ctx.assignmentStatement().qualifiedName(), to);
         mv.visitJumpInsn(GOTO, startLabel);
         mv.visitLabel(endLabel);
     }
 
-    private void updateForCounter(Qualified_nameContext ctx, boolean to) {
+    private void updateForCounter(QualifiedNameContext ctx, boolean to) {
         if (ctx.expression().isEmpty()) {
             updateForVariableCounter(ctx, to);
         } else {
@@ -208,14 +208,14 @@ public class TranslateVisitor {
         }
     }
 
-    private void updateForArrayCellCounter(Qualified_nameContext ctx, boolean to) {
+    private void updateForArrayCellCounter(QualifiedNameContext ctx, boolean to) {
         ArrayType type = loadArray(ctx.ID().getText());
         computeArrayIndex(type, ctx);
         updateCounterValue(ctx, to);
         mv.visitInsn(IASTORE);
     }
 
-    private void updateCounterValue(Qualified_nameContext ctx, boolean to) {
+    private void updateCounterValue(QualifiedNameContext ctx, boolean to) {
         visitQualifiedName(ctx);
         mv.visitInsn(to ? ICONST_1 : ICONST_M1);
         mv.visitInsn(IADD);
@@ -233,7 +233,7 @@ public class TranslateVisitor {
         return type;
     }
 
-    private void updateForVariableCounter(Qualified_nameContext ctx, boolean to) {
+    private void updateForVariableCounter(QualifiedNameContext ctx, boolean to) {
         String var = ctx.ID().getText();
         if (scope.isGlobalVariable(var)) {
             DataType type = scope.getGlobalVariableType(var);
@@ -244,7 +244,7 @@ public class TranslateVisitor {
         }
     }
 
-    private void visitWhile(While_statementContext ctx) {
+    private void visitWhile(WhileStatementContext ctx) {
         Label continueLabel = new Label();
         Label endLabel = new Label();
         mv.visitLabel(continueLabel);
@@ -255,8 +255,8 @@ public class TranslateVisitor {
         mv.visitLabel(endLabel);
     }
 
-    private void visitAssignment(Assignment_statementContext ctx) {
-        Qualified_nameContext nctx = ctx.qualified_name();
+    private void visitAssignment(AssignmentStatementContext ctx) {
+        QualifiedNameContext nctx = ctx.qualifiedName();
         if (nctx.expression().isEmpty()) {
             visitVariableAssignment(nctx.ID().getText(), ctx.expression());
         } else {
@@ -274,7 +274,7 @@ public class TranslateVisitor {
         }
     }
 
-    private void visitArrayAssignment(Qualified_nameContext nctx, ExpressionContext ctx) {
+    private void visitArrayAssignment(QualifiedNameContext nctx, ExpressionContext ctx) {
         ArrayType type = loadArray(nctx.ID().getText());
         computeArrayIndex(type, nctx);
         visitExpression(ctx);
@@ -286,7 +286,7 @@ public class TranslateVisitor {
             throw new CompileException("Not an array type: " + type);
     }
 
-    private void computeArrayIndex(ArrayType type, Qualified_nameContext ctx) {
+    private void computeArrayIndex(ArrayType type, QualifiedNameContext ctx) {
         if (ctx.expression().size() != type.getDimensions().length) {
             throw new CompileException(String.format("Arity exception. Got %d. Expected %d.",
                     ctx.expression().size(), type.getDimensions().length));
@@ -326,15 +326,15 @@ public class TranslateVisitor {
             visitStatement(sctx);
     }
 
-    private void visitFunctionCall(Function_callContext ctx) {
+    private void visitFunctionCall(FunctionCallContext ctx) {
         throw new CompileException("Unsupported statement: " + ctx.getText());
     }
 
-    private void visitRead(Read_statementContext ctx) {
+    private void visitRead(ReadStatementContext ctx) {
         throw new CompileException("Unsupported statement: " + ctx.getText());
     }
 
-    private void visitWrite(Write_statementContext ctx) {
+    private void visitWrite(WriteStatementContext ctx) {
        for (ExpressionContext ectx : ctx.expression()) {
            mv.visitFieldInsn(GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
            visitExpression(ectx);
@@ -351,9 +351,9 @@ public class TranslateVisitor {
     }
 
     private void visitExpression(ExpressionContext ctx) {
-        visitAppTerm(ctx.app_term(0));
+        visitAppTerm(ctx.appTerm(0));
         if (ctx.CMP_OP() != null) {
-            visitAppTerm(ctx.app_term(1));
+            visitAppTerm(ctx.appTerm(1));
             Label endLabel = new Label();
             Label falseLabel = new Label();
             switch (ctx.CMP_OP().getText()) {
@@ -374,19 +374,19 @@ public class TranslateVisitor {
         }
     }
 
-    private void visitAppTerm(App_termContext ctx) {
+    private void visitAppTerm(AppTermContext ctx) {
         if (ctx.SIGN().isEmpty()) {
-            visitMulTerm(ctx.mul_term(0));
+            visitMulTerm(ctx.mulTerm(0));
             return;
         }
         int i = 0;
-        if (ctx.mul_term().size() == ctx.SIGN().size()) {
+        if (ctx.mulTerm().size() == ctx.SIGN().size()) {
             mv.visitInsn(ICONST_0);
         } else {
-            visitMulTerm(ctx.mul_term(i++));
+            visitMulTerm(ctx.mulTerm(i++));
         }
         for (TerminalNode op : ctx.SIGN()) {
-            visitMulTerm(ctx.mul_term(i++));
+            visitMulTerm(ctx.mulTerm(i++));
             switch (op.getText()) {
                 case "+": mv.visitInsn(IADD); break;
                 case "-": mv.visitInsn(ISUB); break;
@@ -394,7 +394,7 @@ public class TranslateVisitor {
         }
     }
 
-    private void visitMulTerm(Mul_termContext ctx) {
+    private void visitMulTerm(MulTermContext ctx) {
         visitFactor(ctx.factor(0));
         if (!ctx.MUL_OP().isEmpty()) {
             int i = 1;
@@ -411,10 +411,10 @@ public class TranslateVisitor {
     private void visitFactor(FactorContext ctx) {
         if (ctx.expression() != null) {
             visitExpression(ctx.expression());
-        } else if (ctx.function_call() != null) {
-            visitFunctionCall(ctx.function_call());
-        } else if (ctx.qualified_name() != null) {
-            visitQualifiedName(ctx.qualified_name());
+        } else if (ctx.functionCall() != null) {
+            visitFunctionCall(ctx.functionCall());
+        } else if (ctx.qualifiedName() != null) {
+            visitQualifiedName(ctx.qualifiedName());
         } else if (ctx.NUMBER() != null) {
             mv.visitLdcInsn(Integer.parseUnsignedInt(ctx.NUMBER().getText()));
         } else {
@@ -422,7 +422,7 @@ public class TranslateVisitor {
         }
     }
 
-    private void visitQualifiedName(Qualified_nameContext ctx) {
+    private void visitQualifiedName(QualifiedNameContext ctx) {
         String var = ctx.ID().getText();
         DataType type;
         if (scope.isGlobalVariable(var)) {
