@@ -23,4 +23,19 @@ public class Range {
     public int getLength() {
         return to - from + 1;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Range range = (Range) o;
+        return !(from != range.from || to != range.to);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = from;
+        result = 31 * result + to;
+        return result;
+    }
 }

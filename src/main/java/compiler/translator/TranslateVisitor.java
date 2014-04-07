@@ -7,6 +7,8 @@ import compiler.translator.type.ArrayType;
 import compiler.translator.type.DataType;
 import compiler.translator.type.PrimitiveType;
 import compiler.translator.type.Range;
+import org.antlr.v4.runtime.misc.NotNull;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
@@ -256,28 +258,29 @@ public class TranslateVisitor {
     }
 
     private void visitAssignment(AssignmentStatementContext ctx) {
-        QualifiedNameContext nctx = ctx.qualifiedName();
-        if (nctx.expression().isEmpty()) {
-            visitVariableAssignment(nctx.ID().getText(), ctx.expression());
+        if (ctx.qualifiedName().expression().isEmpty()) {
+            visitVariableAssignment(ctx);
         } else {
-            visitArrayAssignment(nctx, ctx.expression());
+            visitArrayAssignment(ctx);
         }
     }
 
-    private void visitVariableAssignment(String var, ExpressionContext ctx) {
-        visitExpression(ctx);
+    private void visitVariableAssignment(AssignmentStatementContext ctx) {
+        String var = ctx.qualifiedName().ID().getText();
+        DataType etype = visitExpression(ctx.expression());
         if (scope.isGlobalVariable(var)) {
-            DataType type = scope.getGlobalVariableType(var);
-            mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
+            DataType vtype = scope.getGlobalVariableType(var);
+            verifyType(etype, vtype, ctx);
+            mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, vtype.getType().getDescriptor());
         } else {
             throw new CompileException("Local assignments are not supported yet.");
         }
     }
 
-    private void visitArrayAssignment(QualifiedNameContext nctx, ExpressionContext ctx) {
-        ArrayType type = loadArray(nctx.ID().getText());
-        computeArrayIndex(type, nctx);
-        visitExpression(ctx);
+    private void visitArrayAssignment(AssignmentStatementContext ctx) {
+        ArrayType type = loadArray(ctx.qualifiedName().ID().getText());
+        computeArrayIndex(type, ctx.qualifiedName());
+        verifyType(visitExpression(ctx.expression()), type, ctx);
         mv.visitInsn(IASTORE);
     }
 
@@ -326,8 +329,9 @@ public class TranslateVisitor {
             visitStatement(sctx);
     }
 
-    private void visitFunctionCall(FunctionCallContext ctx) {
+    private DataType visitFunctionCall(FunctionCallContext ctx) {
         throw new CompileException("Unsupported statement: " + ctx.getText());
+        //always return PrimitiveType.INTEGER
     }
 
     private void visitRead(ReadStatementContext ctx) {
@@ -350,10 +354,13 @@ public class TranslateVisitor {
         throw new CompileException("Unsupported continue statement");
     }
 
-    private void visitExpression(ExpressionContext ctx) {
-        visitAppTerm(ctx.appTerm(0));
+    private DataType visitExpression(ExpressionContext ctx) {
+        AppTermContext actx = ctx.appTerm(0);
+        DataType type = visitAppTerm(actx);
         if (ctx.CMP_OP() != null) {
-            visitAppTerm(ctx.appTerm(1));
+            verifyType(type, PrimitiveType.INTEGER, actx);
+            actx = ctx.appTerm(1);
+            verifyType(visitAppTerm(actx), PrimitiveType.INTEGER, actx);
             Label endLabel = new Label();
             Label falseLabel = new Label();
             switch (ctx.CMP_OP().getText()) {
@@ -372,18 +379,18 @@ public class TranslateVisitor {
             mv.visitInsn(ICONST_0);
             mv.visitLabel(endLabel);
         }
+        return type;
     }
 
-    private void visitAppTerm(AppTermContext ctx) {
-        if (ctx.SIGN().isEmpty()) {
-            visitMulTerm(ctx.mulTerm(0));
-            return;
-        }
+    private DataType visitAppTerm(AppTermContext ctx) {
+        if (ctx.SIGN().isEmpty())
+            return visitMulTerm(ctx.mulTerm(0));
         int i = 0;
         if (ctx.mulTerm().size() == ctx.SIGN().size()) {
             mv.visitInsn(ICONST_0);
         } else {
-            visitMulTerm(ctx.mulTerm(i++));
+            MulTermContext mctx = ctx.mulTerm(i++);
+            verifyType(visitMulTerm(mctx), PrimitiveType.INTEGER, mctx);
         }
         for (TerminalNode op : ctx.SIGN()) {
             visitMulTerm(ctx.mulTerm(i++));
@@ -392,11 +399,13 @@ public class TranslateVisitor {
                 case "-": mv.visitInsn(ISUB); break;
             }
         }
+        return PrimitiveType.INTEGER;
     }
 
-    private void visitMulTerm(MulTermContext ctx) {
-        visitFactor(ctx.factor(0));
+    private DataType visitMulTerm(MulTermContext ctx) {
+        DataType type = visitFactor(ctx.factor(0));
         if (!ctx.MUL_OP().isEmpty()) {
+            verifyType(type, PrimitiveType.INTEGER, ctx);
             int i = 1;
             for (TerminalNode op : ctx.MUL_OP()) {
                 visitFactor(ctx.factor(i++));
@@ -406,23 +415,25 @@ public class TranslateVisitor {
                 }
             }
         }
+        return type;
     }
 
-    private void visitFactor(FactorContext ctx) {
+    private DataType visitFactor(FactorContext ctx) {
         if (ctx.expression() != null) {
-            visitExpression(ctx.expression());
+            return visitExpression(ctx.expression());
         } else if (ctx.functionCall() != null) {
-            visitFunctionCall(ctx.functionCall());
+            return visitFunctionCall(ctx.functionCall());
         } else if (ctx.qualifiedName() != null) {
-            visitQualifiedName(ctx.qualifiedName());
+            return visitQualifiedName(ctx.qualifiedName());
         } else if (ctx.NUMBER() != null) {
             mv.visitLdcInsn(Integer.parseUnsignedInt(ctx.NUMBER().getText()));
+            return PrimitiveType.INTEGER;
         } else {
             throw new CompileException("Unsupported expression " + ctx.getText());
         }
     }
 
-    private void visitQualifiedName(QualifiedNameContext ctx) {
+    private DataType visitQualifiedName(QualifiedNameContext ctx) {
         String var = ctx.ID().getText();
         DataType type;
         if (scope.isGlobalVariable(var)) {
@@ -436,5 +447,12 @@ public class TranslateVisitor {
             computeArrayIndex((ArrayType)type, ctx);
             mv.visitInsn(IALOAD);
         }
+        return type;
+    }
+
+    private void verifyType(@NotNull DataType gotten, @NotNull DataType expected, ParseTree ctx) {
+        if (!expected.equals(gotten))
+            throw new CompileException(String.format("Type mismatch in %s. Expected %s. Got %s.", ctx.getText(),
+                    expected.toString(), gotten.toString()));
     }
 }

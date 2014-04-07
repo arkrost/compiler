@@ -2,6 +2,8 @@ package compiler.translator.type;
 
 import org.objectweb.asm.Type;
 
+import java.util.Arrays;
+
 /**
  * @author Arkady Rost
  */
@@ -36,5 +38,27 @@ public class ArrayType implements DataType {
     @Override
     public boolean isPrimitive() {
         return false;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("ARRAY[");
+        for (Range r : dimensions)
+            sb.append(r.getFrom()).append("..").append(r.getTo()).append(',');
+        sb.deleteCharAt(sb.length() - 1).append(']');
+        return sb.toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ArrayType arrayType = (ArrayType) o;
+        return Arrays.equals(dimensions, arrayType.dimensions);
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(dimensions);
     }
 }
