@@ -67,8 +67,9 @@ public class TranslateScope implements Scope {
         return local.size();
     }
 
-    public void addLocalVariable(String name, DataType type) {
+    public int addLocalVariable(String name, DataType type) {
         local.put(name, new LocalVariableDescriptor(local.size(), type));
+        return local.size() - 1;
     }
 
     public boolean isFunctionDeclared(String name, int paramCount) {

@@ -89,18 +89,22 @@ public class TranslateVisitor {
     }
 
     private void createClassConstructor() {
-        MethodVisitor mv = cw.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
+        mv = cw.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
         for (Map.Entry<String, DataType> var : scope.getGlobalVariables().entrySet()) {
             if (var.getValue().isPrimitive())
                 continue;
             ArrayType type = (ArrayType)var.getValue();
-            mv.visitLdcInsn(type.getSize());
-            mv.visitIntInsn(NEWARRAY, T_INT);
+            initializeArray(type);
             mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var.getKey(), var.getValue().getType().getDescriptor());
         }
         mv.visitInsn(RETURN);
         mv.visitMaxs(0, 0);
         mv.visitEnd();
+    }
+
+    private void initializeArray(ArrayType type) {
+        mv.visitLdcInsn(type.getSize());
+        mv.visitIntInsn(NEWARRAY, T_INT);
     }
 
     private void createInstanceConstructor() {
@@ -119,8 +123,8 @@ public class TranslateVisitor {
         Range[] dimensions = new Range[rctxList.size()];
         int i = 0;
         for (RangeContext rctx : rctxList) {
-            int from = Integer.parseUnsignedInt(rctx.NUMBER(0).getText());
-            int to = Integer.parseUnsignedInt(rctx.NUMBER(1).getText());
+            int from = Integer.parseInt(rctx.NUMBER(0).getText());
+            int to = Integer.parseInt(rctx.NUMBER(1).getText());
             dimensions[i++] = new Range(from, to);
         }
         return new ArrayType(dimensions);
@@ -175,7 +179,11 @@ public class TranslateVisitor {
         for (TerminalNode var : ctx.ID()) {
             if (var.getText().equals(scope.getMethodName()))
                 throw new CompileException(String.format("Illegal local variable name %s in %s.", var.getText(), ctx.getText()));
-            scope.addLocalVariable(var.getText(), type);
+            int index = scope.addLocalVariable(var.getText(), type);
+            if (type instanceof ArrayType) {
+                initializeArray((ArrayType) type);
+                mv.visitVarInsn(ASTORE, index);
+            }
         }
     }
 
@@ -331,9 +339,9 @@ public class TranslateVisitor {
     private DataType visitArrayAssignment(AssignmentStatementContext ctx) {
         ArrayType type = loadArray(ctx.qualifiedName().ID().getText());
         computeArrayIndex(type, ctx.qualifiedName());
-        verifyType(visitExpression(ctx.expression()), type, ctx);
+        verifyType(visitExpression(ctx.expression()), PrimitiveType.INTEGER, ctx);
         mv.visitInsn(IASTORE);
-        return type;
+        return PrimitiveType.INTEGER;
     }
 
     private void checkArrayType(DataType type) {
@@ -485,7 +493,7 @@ public class TranslateVisitor {
         } else if (ctx.qualifiedName() != null) {
             return visitQualifiedName(ctx.qualifiedName());
         } else if (ctx.NUMBER() != null) {
-            mv.visitLdcInsn(Integer.parseUnsignedInt(ctx.NUMBER().getText()));
+            mv.visitLdcInsn(Integer.parseInt(ctx.NUMBER().getText()));
             return PrimitiveType.INTEGER;
         } else {
             throw new CompileException("Unsupported expression " + ctx.getText());
@@ -508,6 +516,7 @@ public class TranslateVisitor {
             checkArrayType(type);
             computeArrayIndex((ArrayType)type, ctx);
             mv.visitInsn(IALOAD);
+            return PrimitiveType.INTEGER;
         }
         return type;
     }

@@ -4,8 +4,11 @@ var
  a : array [1 .. 20, 3 .. 5] of integer;
 
 function bar(a, b: integer) : integer;
+var
+    zz : array [1 .. 10] of integer;
 begin
-    write(a + b);
+    zz[3] := 5;
+    write(-zz[3] * a + b);
     bar := a;
 end;
 
