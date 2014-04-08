@@ -5,14 +5,17 @@ var
 
 function bar(a, b: integer) : integer;
 var
+    k : integer;
     zz : array [1 .. 10] of integer;
 begin
     zz[3] := 5;
-    write(-zz[3] * a + b);
+    read(k);
+    write(-zz[3] * a + k);
     bar := a;
 end;
 
 
 begin
-   write(bar(3, 4));
+   read(i);
+   write(bar(i, 4));
 end.

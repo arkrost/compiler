@@ -15,6 +15,8 @@ import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
+import java.io.Console;
+import java.io.PrintStream;
 import java.util.List;
 import java.util.Map;
 
@@ -401,15 +403,32 @@ public class TranslateVisitor {
         return PrimitiveType.INTEGER;
     }
 
+    // халтура: в элемент массива читать нельзя
     private void visitRead(ReadStatementContext ctx) {
-        throw new CompileException("Unsupported statement: " + ctx.getText());
+        for (TerminalNode id : ctx.ID())
+            readIntegerToVariable(id.getText(), ctx);
+    }
+
+    private void readIntegerToVariable(String var, ReadStatementContext ctx) {
+        mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(System.class), "console", Type.getMethodDescriptor(Type.getType(Console.class)), false);
+        mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(Console.class), "readLine", Type.getMethodDescriptor(Type.getType(String.class)), false);
+        mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Integer.class), "parseInt", Type.getMethodDescriptor(Type.INT_TYPE, Type.getType(String.class)), false);
+        if (scope.isLocalVariable(var)) {
+            verifyType(scope.getLocalVariableType(var), PrimitiveType.INTEGER, ctx);
+            mv.visitVarInsn(ISTORE, scope.getLocalVariableIndex(var));
+        } else if (scope.isGlobalVariable(var)) {
+            verifyType(scope.getGlobalVariableType(var), PrimitiveType.INTEGER, ctx);
+            mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, Type.INT_TYPE.getDescriptor());
+        } else {
+            throw new CompileException(String.format("Variable %s not found in context %s", var, ctx));
+        }
     }
 
     private void visitWrite(WriteStatementContext ctx) {
        for (ExpressionContext ectx : ctx.expression()) {
-           mv.visitFieldInsn(GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+           mv.visitFieldInsn(GETSTATIC, Type.getInternalName(System.class), "out", Type.getDescriptor(PrintStream.class));
            visitExpression(ectx);
-           mv.visitMethodInsn(INVOKEVIRTUAL, "java/io/PrintStream", "println", "(I)V", false);
+           mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(PrintStream.class), "println", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE), false);
        }
     }
 
