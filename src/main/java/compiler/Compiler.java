@@ -59,7 +59,7 @@ public class Compiler {
             e.printStackTrace();
             System.exit(1);
         } catch (IOException e) {
-            System.err.println("Unexpected io exception");
+            System.err.println("Unexpected io exception!");
             e.printStackTrace();
             System.exit(1);
         }
