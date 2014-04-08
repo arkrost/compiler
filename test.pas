@@ -3,19 +3,19 @@ var
  i, j : integer;
  a : array [1 .. 20, 3 .. 5] of integer;
 
-function bar(a, b: integer) : integer;
-var
-    k : integer;
-    zz : array [1 .. 10] of integer;
+function isEven(i : integer) : integer;
 begin
-    zz[3] := 5;
-    read(k);
-    write(-zz[3] * a + k);
-    bar := a;
+    isEven := (i / 2) * 2 = i;
 end;
 
-
 begin
-   read(i);
-   write(bar(i, 4));
+   read(j);
+   for i := j to 20 do
+   begin
+        if isEven(i) then
+            continue
+        else if i > 11 then
+            break;
+        write(i);
+   end;
 end.

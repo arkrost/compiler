@@ -189,29 +189,29 @@ public class TranslateVisitor {
         }
     }
 
-    private void visitStatement(StatementContext sctx) {
-        if (sctx.ifStatement() != null) {
-            visitIf(sctx.ifStatement());
-        } else if (sctx.forStatement() != null) {
-            visitFor(sctx.forStatement());
-        } else if (sctx.whileStatement() != null) {
-            visitWhile(sctx.whileStatement());
-        } else if (sctx.assignmentStatement() != null) {
-            visitAssignment(sctx.assignmentStatement());
-        } else if (sctx.block() != null) {
-            visitBlock(sctx.block());
-        }else if (sctx.functionCall() != null) {
-            visitFunctionCall(sctx.functionCall());
-        } else if (sctx.readStatement() != null) {
-            visitRead(sctx.readStatement());
-        } else if (sctx.writeStatement() != null) {
-            visitWrite(sctx.writeStatement());
-        } else if (sctx.breakStatement() != null) {
-            visitBreak();
-        } else if (sctx.continueStatement() != null) {
-            visitContinue();
+    private void visitStatement(StatementContext ctx) {
+        if (ctx.ifStatement() != null) {
+            visitIf(ctx.ifStatement());
+        } else if (ctx.forStatement() != null) {
+            visitFor(ctx.forStatement());
+        } else if (ctx.whileStatement() != null) {
+            visitWhile(ctx.whileStatement());
+        } else if (ctx.assignmentStatement() != null) {
+            visitAssignment(ctx.assignmentStatement());
+        } else if (ctx.block() != null) {
+            visitBlock(ctx.block());
+        } else if (ctx.functionCall() != null) {
+            visitFunctionCall(ctx.functionCall());
+        } else if (ctx.readStatement() != null) {
+            visitRead(ctx.readStatement());
+        } else if (ctx.writeStatement() != null) {
+            visitWrite(ctx.writeStatement());
+        } else if (ctx.breakStatement() != null) {
+            visitBreak(ctx.breakStatement());
+        } else if (ctx.continueStatement() != null) {
+            visitContinue(ctx.continueStatement());
         } else {
-            throw new CompileException("Unsupported statement: " + sctx.getText());
+            throw new CompileException("Unsupported statement: " + ctx.getText());
         }
     }
 
@@ -235,18 +235,20 @@ public class TranslateVisitor {
     private void visitFor(ForStatementContext ctx) {
         verifyType(visitAssignment(ctx.assignmentStatement()), PrimitiveType.INTEGER, ctx);
         Label startLabel = new Label();
-        Label endLabel = new Label();
+        Label breakLabel = new Label();
         Label continueLabel = new Label();
+        scope.enterLoop(continueLabel, breakLabel);
         boolean to = "to".equals(ctx.DIRECTION().getText());
         mv.visitLabel(startLabel);
         visitExpression(ctx.expression());
         visitQualifiedName(ctx.assignmentStatement().qualifiedName());
-        mv.visitJumpInsn(to ? IF_ICMPLT : IF_ICMPGT, endLabel);
+        mv.visitJumpInsn(to ? IF_ICMPLT : IF_ICMPGT, breakLabel);
         visitStatement(ctx.statement());
         mv.visitLabel(continueLabel);
         updateForCounter(ctx.assignmentStatement().qualifiedName(), to);
         mv.visitJumpInsn(GOTO, startLabel);
-        mv.visitLabel(endLabel);
+        mv.visitLabel(breakLabel);
+        scope.exitLoop();
     }
 
     private void updateForCounter(QualifiedNameContext ctx, boolean to) {
@@ -301,13 +303,15 @@ public class TranslateVisitor {
 
     private void visitWhile(WhileStatementContext ctx) {
         Label continueLabel = new Label();
-        Label endLabel = new Label();
+        Label breakLabel = new Label();
+        scope.enterLoop(continueLabel, breakLabel);
         mv.visitLabel(continueLabel);
         visitExpression(ctx.expression());
-        mv.visitJumpInsn(IFEQ, endLabel);
+        mv.visitJumpInsn(IFEQ, breakLabel);
         visitStatement(ctx.statement());
         mv.visitJumpInsn(GOTO, continueLabel);
-        mv.visitLabel(endLabel);
+        mv.visitLabel(breakLabel);
+        scope.exitLoop();
     }
 
     private DataType visitAssignment(AssignmentStatementContext ctx) {
@@ -432,12 +436,16 @@ public class TranslateVisitor {
        }
     }
 
-    private void visitBreak() {
-        throw new CompileException("Unsupported break statement");
+    private void visitBreak(BreakStatementContext ctx) {
+        if (!scope.inLoop())
+            throw new CompileException("Break is out of loop " + ctx.getText());
+        mv.visitJumpInsn(GOTO, scope.getBreakLabel());
     }
 
-    private void visitContinue() {
-        throw new CompileException("Unsupported continue statement");
+    private void visitContinue(ContinueStatementContext ctx) {
+        if (!scope.inLoop())
+            throw new CompileException("Continue is out of loop " + ctx.getText());
+        mv.visitJumpInsn(GOTO, scope.getContinueLabel());
     }
 
     private DataType visitExpression(ExpressionContext ctx) {

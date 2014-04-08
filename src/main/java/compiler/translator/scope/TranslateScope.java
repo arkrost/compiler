@@ -1,6 +1,7 @@
 package compiler.translator.scope;
 
 import compiler.translator.type.DataType;
+import org.objectweb.asm.Label;
 
 import java.util.*;
 
@@ -14,6 +15,7 @@ public class TranslateScope implements Scope {
     private Map<String, DataType> global = new HashMap<>();
     private Set<PascalFunctionDescriptor> functions = new HashSet<>();
     private Map<String, LocalVariableDescriptor> local = new HashMap<>();
+    private Stack<LoopDescriptor> loop = new Stack<>();
 
     public String getClassName() {
         return className;
@@ -86,5 +88,25 @@ public class TranslateScope implements Scope {
 
     public void setMethodName(String methodName) {
         this.methodName = methodName;
+    }
+
+    public boolean inLoop() {
+        return !loop.isEmpty();
+    }
+
+    public Label getContinueLabel() {
+        return loop.peek().getContinueLabel();
+    }
+
+    public Label getBreakLabel() {
+        return loop.peek().getBreakLabel();
+    }
+
+    public void enterLoop(Label continueLabel, Label breakLabel) {
+        loop.push(new LoopDescriptor(continueLabel, breakLabel));
+    }
+
+    public void exitLoop() {
+        loop.pop();
     }
 }
