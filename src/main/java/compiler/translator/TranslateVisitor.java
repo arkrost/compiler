@@ -130,7 +130,7 @@ public class TranslateVisitor {
         scope.addGlobalVariable(name, type);
         String descriptor = type.getType().getDescriptor();
         Object value = type.isPrimitive() ? 0 : null;
-        cw.visitField(ACC_PRIVATE | ACC_STATIC, name, descriptor, null, value).visitEnd();
+        cw.visitField(ACC_PUBLIC | ACC_STATIC, name, descriptor, null, value).visitEnd();
     }
 
     private void visitFunctionDeclarations(FunctionDeclarationsContext ctx) {
@@ -139,7 +139,44 @@ public class TranslateVisitor {
     }
 
     private void visitFunctionDeclaration(FunctionDeclarationContext ctx) {
-        throw new CompileException("Function declarations aren't supported yet. " + ctx.getText());
+        String name = ctx.ID().getText();
+        scope.setMethodName(name);
+        for (ParamDeclarationContext pctx : ctx.paramDeclaration()) {
+            for (TerminalNode id : pctx.ID()) {
+                if (scope.isLocalVariable(id.getText()))
+                    throw new CompileException(String.format("Duplicate parameter %s in declaration %s", id.getText(), ctx.getText()));
+                if (name.equals(id.getText()))
+                    throw new CompileException(String.format("Illegal parameter %s name in declaration %s.", id.getText(), ctx.getText()));
+                scope.addLocalVariable(id.getText(), PrimitiveType.INTEGER);
+            }
+        }
+        int paramCount = scope.getLocalVariableCount();
+        if (scope.isFunctionDeclared(name, paramCount))
+            throw new CompileException(String.format("Function with same signature as %s already declared.", ctx.getText()));
+        scope.declareFunction(name, paramCount);
+        mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, name, Utils.getPascalFunctionDescriptor(paramCount), null, null);
+
+        visitLocalVariableDeclarations(ctx.varDeclarations());
+        visitBlock(ctx.block());
+
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+        scope.setMethodName(null);
+        scope.refreshLocalVariables();
+    }
+
+    private void visitLocalVariableDeclarations(VarDeclarationsContext ctx) {
+        for (VarDeclarationContext vctx : ctx.varDeclaration())
+            visitLocalVariableDeclaration(vctx);
+    }
+
+    private void visitLocalVariableDeclaration(VarDeclarationContext ctx) {
+        DataType type = getType(ctx.type());
+        for (TerminalNode var : ctx.ID()) {
+            if (var.getText().equals(scope.getMethodName()))
+                throw new CompileException(String.format("Illegal local variable name %s in %s.", var.getText(), ctx.getText()));
+            scope.addLocalVariable(var.getText(), type);
+        }
     }
 
     private void visitStatement(StatementContext sctx) {
@@ -186,7 +223,7 @@ public class TranslateVisitor {
     }
 
     private void visitFor(ForStatementContext ctx) {
-        visitAssignment(ctx.assignmentStatement());
+        verifyType(visitAssignment(ctx.assignmentStatement()), PrimitiveType.INTEGER, ctx);
         Label startLabel = new Label();
         Label endLabel = new Label();
         Label continueLabel = new Label();
@@ -225,24 +262,30 @@ public class TranslateVisitor {
 
     private ArrayType loadArray(String var) {
         ArrayType type;
-        if (scope.isGlobalVariable(var)) {
+        if (scope.isLocalVariable(var)) {
+            checkArrayType(scope.getLocalVariableType(var));
+            type = (ArrayType)scope.getLocalVariableType(var);
+            mv.visitVarInsn(ALOAD, scope.getLocalVariableIndex(var));
+        } else if (scope.isGlobalVariable(var)) {
             checkArrayType(scope.getGlobalVariableType(var));
             type = (ArrayType)scope.getGlobalVariableType(var);
             mv.visitFieldInsn(GETSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
         } else {
-            throw new CompileException("Local assignments are not supported yet.");
+            throw new CompileException(String.format("Variable %s not found.", var));
         }
         return type;
     }
 
     private void updateForVariableCounter(QualifiedNameContext ctx, boolean to) {
         String var = ctx.ID().getText();
-        if (scope.isGlobalVariable(var)) {
+        if (scope.isLocalVariable(var)) {
+            mv.visitIincInsn(scope.getLocalVariableIndex(var), to ? ICONST_1 : ICONST_M1);
+        } else if (scope.isGlobalVariable(var)) {
             DataType type = scope.getGlobalVariableType(var);
             updateCounterValue(ctx, to);
             mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
         } else {
-            throw new CompileException("Local assignments are not supported yet.");
+            throw new RuntimeException("No variable in contexts " + ctx.getText());
         }
     }
 
@@ -257,31 +300,40 @@ public class TranslateVisitor {
         mv.visitLabel(endLabel);
     }
 
-    private void visitAssignment(AssignmentStatementContext ctx) {
+    private DataType visitAssignment(AssignmentStatementContext ctx) {
         if (ctx.qualifiedName().expression().isEmpty()) {
-            visitVariableAssignment(ctx);
+            return visitVariableAssignment(ctx);
         } else {
-            visitArrayAssignment(ctx);
+            return visitArrayAssignment(ctx);
         }
     }
 
-    private void visitVariableAssignment(AssignmentStatementContext ctx) {
+    private DataType visitVariableAssignment(AssignmentStatementContext ctx) {
         String var = ctx.qualifiedName().ID().getText();
         DataType etype = visitExpression(ctx.expression());
-        if (scope.isGlobalVariable(var)) {
+        if (var.equals(scope.getMethodName())) {
+            verifyType(etype, PrimitiveType.INTEGER, ctx);
+            mv.visitInsn(IRETURN);
+        } else if (scope.isLocalVariable(var)) {
+            verifyType(etype, scope.getLocalVariableType(var), ctx);
+            int opcode = scope.getLocalVariableType(var).isPrimitive() ? ISTORE : ASTORE;
+            mv.visitVarInsn(opcode, scope.getLocalVariableIndex(var));
+        } else if (scope.isGlobalVariable(var)) {
             DataType vtype = scope.getGlobalVariableType(var);
             verifyType(etype, vtype, ctx);
             mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, vtype.getType().getDescriptor());
         } else {
-            throw new CompileException("Local assignments are not supported yet.");
+            throw new CompileException(String.format("Variable %s not found in context %s.", var, ctx.getText()));
         }
+        return etype;
     }
 
-    private void visitArrayAssignment(AssignmentStatementContext ctx) {
+    private DataType visitArrayAssignment(AssignmentStatementContext ctx) {
         ArrayType type = loadArray(ctx.qualifiedName().ID().getText());
         computeArrayIndex(type, ctx.qualifiedName());
         verifyType(visitExpression(ctx.expression()), type, ctx);
         mv.visitInsn(IASTORE);
+        return type;
     }
 
     private void checkArrayType(DataType type) {
@@ -330,8 +382,15 @@ public class TranslateVisitor {
     }
 
     private DataType visitFunctionCall(FunctionCallContext ctx) {
-        throw new CompileException("Unsupported statement: " + ctx.getText());
-        //always return PrimitiveType.INTEGER
+        int paramCount = ctx.expression().size();
+        String name = ctx.ID().getText();
+        String desc = Utils.getPascalFunctionDescriptor(paramCount);
+        if (!scope.isFunctionDeclared(name, paramCount))
+            throw new CompileException(String.format("No such method %s%s available in call %s", name, desc, ctx.getText()));
+        for (ExpressionContext ectx : ctx.expression())
+            verifyType(visitExpression(ectx), PrimitiveType.INTEGER, ctx);
+        mv.visitMethodInsn(INVOKESTATIC, scope.getClassName(), name, desc, false);
+        return PrimitiveType.INTEGER;
     }
 
     private void visitRead(ReadStatementContext ctx) {
@@ -436,11 +495,14 @@ public class TranslateVisitor {
     private DataType visitQualifiedName(QualifiedNameContext ctx) {
         String var = ctx.ID().getText();
         DataType type;
-        if (scope.isGlobalVariable(var)) {
-             type = scope.getGlobalVariableType(var);
+        if (scope.isLocalVariable(var)) {
+            type = scope.getLocalVariableType(var);
+            mv.visitVarInsn(type.isPrimitive() ? ILOAD : ALOAD, scope.getLocalVariableIndex(var));
+        } else if (scope.isGlobalVariable(var)) {
+            type = scope.getGlobalVariableType(var);
             mv.visitFieldInsn(GETSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
         } else {
-            throw new CompileException("Local variables are not supported yet.");
+            throw new CompileException(String.format("Variable %s not found in context %s.", var, ctx.getText()));
         }
         if (!ctx.expression().isEmpty()) {
             checkArrayType(type);

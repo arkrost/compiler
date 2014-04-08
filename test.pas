@@ -2,10 +2,14 @@ program Foo;
 var
  i, j : integer;
  a : array [1 .. 20, 3 .. 5] of integer;
+
+function bar(a, b: integer) : integer;
 begin
-    i := 3;
-    while i <= 5 do begin
-        write(i);
-        i := i + 1;
-    end;
+    write(a + b);
+    bar := a;
+end;
+
+
+begin
+   write(bar(3, 4));
 end.
