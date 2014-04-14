@@ -502,10 +502,11 @@ public class TranslateVisitor {
             verifyType(type, PrimitiveType.INTEGER, ctx);
             int i = 1;
             for (TerminalNode op : ctx.MUL_OP()) {
-                visitFactor(ctx.factor(i++));
+                type = visitFactor(ctx.factor(i++));
                 switch (op.getText()) {
                     case "*": mv.visitInsn(IMUL); break;
                     case "/": mv.visitInsn(IDIV); break;
+                    case "mod": mv.visitInsn(IREM); break;
                 }
             }
         }
