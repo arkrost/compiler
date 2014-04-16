@@ -8,10 +8,10 @@ import java.util.Arrays;
  * @author Arkady Rost
  */
 public class ArrayType implements DataType {
-    private final DataType type;
+    private final PrimitiveType type;
     private final Range[] dimensions;
 
-    public ArrayType(DataType type, Range... dimensions) {
+    public ArrayType(PrimitiveType type, Range... dimensions) {
         this.type = type;
         this.dimensions = dimensions;
     }
@@ -27,6 +27,10 @@ public class ArrayType implements DataType {
     @Override
     public Type getType() {
         return Type.getType(int[].class);
+    }
+
+    public PrimitiveType getDataType() {
+        return type;
     }
 
     public int getSize() {

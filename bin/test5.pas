@@ -1,4 +1,4 @@
-program Foo;
+program test5;
 var
  i, j : integer;
  a : array [0 .. 20] of boolean;

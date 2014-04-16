@@ -183,7 +183,7 @@ public class TranslateVisitor {
 
         mv.visitMaxs(0, 0);
         mv.visitEnd();
-        scope.setMethodName(null);
+        scope.setMethodName("");
         scope.refreshLocalVariables();
     }
 
@@ -424,22 +424,46 @@ public class TranslateVisitor {
         return returnType;
     }
 
-    // todo fix
-    // в элемент массива читать нельзя
     private void visitRead(ReadStatementContext ctx) {
-        for (TerminalNode id : ctx.ID())
-            readIntegerToVariable(id.getText(), ctx);
+        for (QualifiedNameContext nctx : ctx.qualifiedName()) {
+            if (nctx.expression().isEmpty()) {
+                readVariable(nctx, ctx);
+            } else {
+                readArrayElement(nctx);
+            }
+        }
     }
 
-    private void readIntegerToVariable(String var, ReadStatementContext ctx) {
+    private void readValue(PrimitiveType type) {
         mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(System.class), "console", Type.getMethodDescriptor(Type.getType(Console.class)), false);
         mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(Console.class), "readLine", Type.getMethodDescriptor(Type.getType(String.class)), false);
-        mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Integer.class), "parseInt", Type.getMethodDescriptor(Type.INT_TYPE, Type.getType(String.class)), false);
+        switch (type) {
+            case BOOLEAN:
+                mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Boolean.class), "parseBoolean", Type.getMethodDescriptor(Type.BOOLEAN_TYPE, Type.getType(String.class)), false);
+                break;
+            case INTEGER:
+                mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Integer.class), "parseInt", Type.getMethodDescriptor(Type.INT_TYPE, Type.getType(String.class)), false);
+                break;
+        }
+    }
+
+    private void readArrayElement(QualifiedNameContext nctx) {
+        String var = nctx.ID().getText();
+        ArrayType type = loadArray(var);
+        computeArrayIndex(type, nctx);
+        readValue(type.getDataType());
+        mv.visitInsn(IASTORE);
+    }
+
+    private void readVariable(QualifiedNameContext nctx, ReadStatementContext ctx) {
+        String var = nctx.ID().getText();
         if (scope.isLocalVariable(var)) {
-            verifyType(scope.getLocalVariableType(var), PrimitiveType.INTEGER, ctx);
+            verifyPrimitiveType(scope.getLocalVariableType(var), ctx);
+            readValue((PrimitiveType)scope.getLocalVariableType(var));
             mv.visitVarInsn(ISTORE, scope.getLocalVariableIndex(var));
         } else if (scope.isGlobalVariable(var)) {
-            verifyType(scope.getGlobalVariableType(var), PrimitiveType.INTEGER, ctx);
+            verifyPrimitiveType(scope.getGlobalVariableType(var), ctx);
+            readValue((PrimitiveType)scope.getGlobalVariableType(var));
             mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, Type.INT_TYPE.getDescriptor());
         } else {
             throw new CompileException(String.format("Variable %s not found in context %s", var, ctx));
@@ -608,9 +632,10 @@ public class TranslateVisitor {
         }
         if (!ctx.expression().isEmpty()) {
             checkArrayType(type);
-            computeArrayIndex((ArrayType)type, ctx);
+            ArrayType arrType = (ArrayType)type;
+            computeArrayIndex(arrType, ctx);
             mv.visitInsn(IALOAD);
-            return PrimitiveType.INTEGER;
+            return arrType.getDataType();
         }
         return type;
     }
@@ -619,5 +644,11 @@ public class TranslateVisitor {
         if (!expected.equals(gotten))
             throw new CompileException(String.format("Type mismatch in %s. Expected %s. Got %s.", ctx.getText(),
                     expected.toString(), gotten.toString()));
+    }
+
+    private void verifyPrimitiveType(@NotNull DataType gotten, ParseTree ctx) {
+        if (!gotten.isPrimitive())
+            throw new CompileException(String.format("Type mismatch in %s. Expected primitive type. Got %s.",
+                    ctx.getText(), gotten.toString()));
     }
 }

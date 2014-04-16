@@ -1,4 +1,4 @@
-program Foo;
+program test4;
 var
  i, j : integer;
  a : array [1 .. 20] of integer;

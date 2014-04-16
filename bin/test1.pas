@@ -3,7 +3,7 @@ var
  i, j : integer;
  a : array [1 .. 20, 3 .. 5] of integer;
 
-function isEven(i : integer) : integer;
+function isEven(i : integer) : boolean;
 begin
     isEven := (i / 2) * 2 = i;
 end;

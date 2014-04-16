@@ -31,7 +31,7 @@ elsePart           : 'else' statement ;
 forStatement       : 'for' assignmentStatement DIRECTION expression 'do' statement ;
 whileStatement     : 'while' expression 'do' statement ;
 assignmentStatement: qualifiedName ':=' expression ;
-readStatement      : 'read' '(' ID (',' ID)* ')' ;
+readStatement      : 'read' '(' qualifiedName (',' qualifiedName)* ')' ;
 writeStatement     : 'write' '(' expression (',' expression)* ')' ;
 breakStatement     : 'break' ;
 continueStatement  : 'continue' ;
