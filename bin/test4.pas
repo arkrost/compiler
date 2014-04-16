@@ -26,6 +26,7 @@ begin
    for i := 1 to 20 do
    begin
         if isEven(i) then a[i] := i * 10 else a[i] := i;
+        write(a[i]);
    end;
    a := squareArrayElements(a);
    for i := 1 to 20 do write(a[i]);

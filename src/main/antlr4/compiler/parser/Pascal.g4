@@ -7,13 +7,12 @@ varDeclarations : ('var' (varDeclaration ';')+ )? ;
 varDeclaration  : ID (',' ID)* ':' type ;
 
 functionDeclarations   : functionDeclaration* ;
-paramDeclaration       : ID (',' ID)* ':' PRIMITIVE_TYPE ;
 functionDeclaration    :
- 'function' ID ('(' paramDeclaration* ')')? ':' PRIMITIVE_TYPE ';' varDeclarations block ';' ;
+ 'function' ID ('(' varDeclaration* ')')? ':' type ';' varDeclarations block ';' ;
 
 
 block           : 'begin' (statement ';')* 'end' ;
-functionCall   : ID '(' expression (',' expression)* ')' ;
+functionCall   : ID '(' (expression (',' expression)*)? ')' ;
 qualifiedName  : ID ('[' expression (',' expression)* ']')? ;
 
 statement   : ifStatement

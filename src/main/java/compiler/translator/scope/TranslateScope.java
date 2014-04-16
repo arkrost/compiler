@@ -3,7 +3,10 @@ package compiler.translator.scope;
 import compiler.translator.type.DataType;
 import org.objectweb.asm.Label;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Stack;
 
 /**
  * @author Arkady Rost
@@ -11,9 +14,10 @@ import java.util.*;
 public class TranslateScope implements Scope {
     private String className;
     private String methodName;
+    private DataType methodType;
     private byte[] byteCode;
     private Map<String, DataType> global = new HashMap<>();
-    private Set<PascalFunctionDescriptor> functions = new HashSet<>();
+    private Map<FunctionSignature, DataType> functions = new HashMap<>();
     private Map<String, LocalVariableDescriptor> local = new HashMap<>();
     private Stack<LoopDescriptor> loop = new Stack<>();
 
@@ -65,21 +69,21 @@ public class TranslateScope implements Scope {
         return local.get(name).getType();
     }
 
-    public int getLocalVariableCount() {
-        return local.size();
-    }
-
     public int addLocalVariable(String name, DataType type) {
         local.put(name, new LocalVariableDescriptor(local.size(), type));
         return local.size() - 1;
     }
 
-    public boolean isFunctionDeclared(String name, int paramCount) {
-        return functions.contains(new PascalFunctionDescriptor(name, paramCount));
+    public boolean isFunctionDeclared(String name, DataType[] argumentType) {
+        return functions.containsKey(new FunctionSignature(name, argumentType));
     }
 
-    public void declareFunction(String name, int paramCount) {
-        functions.add(new PascalFunctionDescriptor(name, paramCount));
+    public DataType getFunctionReturnType(String name, DataType[] argumentType) {
+        return functions.get(new FunctionSignature(name, argumentType));
+    }
+
+    public void declareFunction(String name, DataType resType, DataType[] argumentType) {
+        functions.put(new FunctionSignature(name, argumentType), resType);
     }
 
     public String getMethodName() {
@@ -88,6 +92,15 @@ public class TranslateScope implements Scope {
 
     public void setMethodName(String methodName) {
         this.methodName = methodName;
+    }
+
+
+    public DataType getMethodType() {
+        return methodType;
+    }
+
+    public void setMethodType(DataType methodType) {
+        this.methodType = methodType;
     }
 
     public boolean inLoop() {

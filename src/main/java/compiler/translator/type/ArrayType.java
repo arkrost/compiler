@@ -8,10 +8,11 @@ import java.util.Arrays;
  * @author Arkady Rost
  */
 public class ArrayType implements DataType {
-    private static final Type type = Type.getType(int[].class);
+    private final DataType type;
     private final Range[] dimensions;
 
-    public ArrayType(Range... dimensions) {
+    public ArrayType(DataType type, Range... dimensions) {
+        this.type = type;
         this.dimensions = dimensions;
     }
 
@@ -25,7 +26,7 @@ public class ArrayType implements DataType {
 
     @Override
     public Type getType() {
-        return type;
+        return Type.getType(int[].class);
     }
 
     public int getSize() {
@@ -45,7 +46,7 @@ public class ArrayType implements DataType {
         StringBuilder sb = new StringBuilder("ARRAY[");
         for (Range r : dimensions)
             sb.append(r.getFrom()).append("..").append(r.getTo()).append(',');
-        sb.deleteCharAt(sb.length() - 1).append(']');
+        sb.deleteCharAt(sb.length() - 1).append("] of ").append(type);
         return sb.toString();
     }
 
@@ -54,11 +55,14 @@ public class ArrayType implements DataType {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ArrayType arrayType = (ArrayType) o;
-        return Arrays.equals(dimensions, arrayType.dimensions);
+        return Arrays.equals(dimensions, arrayType.dimensions) && !(type != null ? !type.equals(arrayType.type) : arrayType.type != null);
+
     }
 
     @Override
     public int hashCode() {
-        return Arrays.hashCode(dimensions);
+        int result = type != null ? type.hashCode() : 0;
+        result = 31 * result + (dimensions != null ? Arrays.hashCode(dimensions) : 0);
+        return result;
     }
 }

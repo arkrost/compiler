@@ -97,7 +97,7 @@ public class TranslateVisitor {
                 continue;
             ArrayType type = (ArrayType)var.getValue();
             initializeArray(type);
-            mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var.getKey(), var.getValue().getType().getDescriptor());
+            mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var.getKey(), Type.getDescriptor(int[].class));
         }
         mv.visitInsn(RETURN);
         mv.visitMaxs(0, 0);
@@ -120,8 +120,9 @@ public class TranslateVisitor {
 
     private static DataType getType(TypeContext ctx) {
         List<RangeContext> rctxList = ctx.range();
-        if (rctxList.isEmpty())
-            return PrimitiveType.INTEGER;
+        if (rctxList.isEmpty()) {
+            return getPrimitiveType(ctx.getText());
+        }
         Range[] dimensions = new Range[rctxList.size()];
         int i = 0;
         for (RangeContext rctx : rctxList) {
@@ -129,8 +130,18 @@ public class TranslateVisitor {
             int to = Integer.parseInt(rctx.NUMBER(1).getText());
             dimensions[i++] = new Range(from, to);
         }
-        return new ArrayType(dimensions);
+        return new ArrayType(getPrimitiveType(ctx.PRIMITIVE_TYPE().getText()), dimensions);
     }
+
+    private static PrimitiveType getPrimitiveType(String type) {
+        switch (type) {
+            case "integer": return PrimitiveType.INTEGER;
+            case "boolean": return PrimitiveType.BOOLEAN;
+            default:
+                throw new CompileException("Unknown primitive type: " + type);
+        }
+    }
+
 
     private void declareField(String name, DataType type) {
         scope.addGlobalVariable(name, type);
@@ -144,24 +155,28 @@ public class TranslateVisitor {
             visitFunctionDeclaration(fctx);
     }
 
-    // todo fix
     private void visitFunctionDeclaration(FunctionDeclarationContext ctx) {
         String name = ctx.ID().getText();
         scope.setMethodName(name);
-        for (ParamDeclarationContext pctx : ctx.paramDeclaration()) {
+        DataType retType = getType(ctx.type());
+        scope.setMethodType(retType);
+        DataType[] argType = new DataType[ctx.varDeclaration().size()];
+        int i = 0;
+        for (VarDeclarationContext pctx : ctx.varDeclaration()) {
+            DataType type = getType(pctx.type());
             for (TerminalNode id : pctx.ID()) {
                 if (scope.isLocalVariable(id.getText()))
                     throw new CompileException(String.format("Duplicate parameter %s in declaration %s", id.getText(), ctx.getText()));
                 if (name.equals(id.getText()))
                     throw new CompileException(String.format("Illegal parameter %s name in declaration %s.", id.getText(), ctx.getText()));
-                scope.addLocalVariable(id.getText(), PrimitiveType.INTEGER);
+                scope.addLocalVariable(id.getText(), type);
             }
+            argType[i++] = type;
         }
-        int paramCount = scope.getLocalVariableCount();
-        if (scope.isFunctionDeclared(name, paramCount))
+        if (scope.isFunctionDeclared(name, argType))
             throw new CompileException(String.format("Function with same signature as %s already declared.", ctx.getText()));
-        scope.declareFunction(name, paramCount);
-        mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, name, Utils.getPascalFunctionDescriptor(paramCount), null, null);
+        scope.declareFunction(name, retType, argType);
+        mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC, name, Utils.getFunctionDescriptor(retType, argType), null, null);
 
         visitLocalVariableDeclarations(ctx.varDeclarations());
         visitBlock(ctx.block());
@@ -292,7 +307,7 @@ public class TranslateVisitor {
     private void updateForVariableCounter(QualifiedNameContext ctx, boolean to) {
         String var = ctx.ID().getText();
         if (scope.isLocalVariable(var)) {
-            mv.visitIincInsn(scope.getLocalVariableIndex(var), to ? ICONST_1 : ICONST_M1);
+            mv.visitIincInsn(scope.getLocalVariableIndex(var), to ? 1 : -1);
         } else if (scope.isGlobalVariable(var)) {
             DataType type = scope.getGlobalVariableType(var);
             updateCounterValue(ctx, to);
@@ -315,7 +330,6 @@ public class TranslateVisitor {
         scope.exitLoop();
     }
 
-    //todo fix
     private DataType visitAssignment(AssignmentStatementContext ctx) {
         if (ctx.qualifiedName().expression().isEmpty()) {
             return visitVariableAssignment(ctx);
@@ -328,8 +342,8 @@ public class TranslateVisitor {
         String var = ctx.qualifiedName().ID().getText();
         DataType etype = visitExpression(ctx.expression());
         if (var.equals(scope.getMethodName())) {
-            verifyType(etype, PrimitiveType.INTEGER, ctx); // todo check method type
-            mv.visitInsn(IRETURN);
+            verifyType(etype, scope.getMethodType(), ctx);
+            mv.visitInsn(etype.isPrimitive() ? IRETURN : ARETURN);
         } else if (scope.isLocalVariable(var)) {
             verifyType(etype, scope.getLocalVariableType(var), ctx);
             int opcode = scope.getLocalVariableType(var).isPrimitive() ? ISTORE : ASTORE;
@@ -398,15 +412,16 @@ public class TranslateVisitor {
     }
 
     private DataType visitFunctionCall(FunctionCallContext ctx) {
-        int paramCount = ctx.expression().size();
         String name = ctx.ID().getText();
-        String desc = Utils.getPascalFunctionDescriptor(paramCount);
-        if (!scope.isFunctionDeclared(name, paramCount))
-            throw new CompileException(String.format("No such method %s%s available in call %s", name, desc, ctx.getText()));
+        int i = 0;
+        DataType[] argumentType = new DataType[ctx.expression().size()];
         for (ExpressionContext ectx : ctx.expression())
-            verifyType(visitExpression(ectx), PrimitiveType.INTEGER, ctx);
-        mv.visitMethodInsn(INVOKESTATIC, scope.getClassName(), name, desc, false);
-        return PrimitiveType.INTEGER;
+            argumentType[i++] = visitExpression(ectx);
+        if (!scope.isFunctionDeclared(name, argumentType))
+            throw new CompileException(String.format("No such method %s available in call %s", name, ctx.getText()));
+        DataType returnType = scope.getFunctionReturnType(name, argumentType);
+        mv.visitMethodInsn(INVOKESTATIC, scope.getClassName(), name, Utils.getFunctionDescriptor(returnType, argumentType), false);
+        return returnType;
     }
 
     // todo fix
@@ -460,7 +475,7 @@ public class TranslateVisitor {
             actx = ctx.appTerm(1);
             verifyType(visitAppTerm(actx), type, actx);
             if (Utils.isBooleanOperator(op)) {
-              switch (op) {
+                switch (op) {
                   case "or":
                       mv.visitInsn(IOR);
                       break;
@@ -469,7 +484,7 @@ public class TranslateVisitor {
                       break;
                   default:
                       throw new CompileException("Unsupported boolean operation: " + ctx.getText());
-              }
+                }
             } else {
                 Label endLabel = new Label();
                 Label falseLabel = new Label();
@@ -501,6 +516,7 @@ public class TranslateVisitor {
                 mv.visitInsn(ICONST_0);
                 mv.visitLabel(endLabel);
             }
+            return PrimitiveType.BOOLEAN;
         }
         return type;
     }
@@ -516,7 +532,8 @@ public class TranslateVisitor {
             verifyType(visitMulTerm(mctx), PrimitiveType.INTEGER, mctx);
         }
         for (TerminalNode op : ctx.SIGN()) {
-            visitMulTerm(ctx.mulTerm(i++));
+            MulTermContext mctx = ctx.mulTerm(i++);
+            verifyType(visitMulTerm(mctx), PrimitiveType.INTEGER, mctx);
             switch (op.getText()) {
                 case "+": mv.visitInsn(IADD); break;
                 case "-": mv.visitInsn(ISUB); break;
