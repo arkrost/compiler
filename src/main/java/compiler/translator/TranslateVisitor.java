@@ -144,6 +144,7 @@ public class TranslateVisitor {
             visitFunctionDeclaration(fctx);
     }
 
+    // todo fix
     private void visitFunctionDeclaration(FunctionDeclarationContext ctx) {
         String name = ctx.ID().getText();
         scope.setMethodName(name);
@@ -216,7 +217,7 @@ public class TranslateVisitor {
     }
 
     private void visitIf(IfStatementContext ctx) {
-        visitExpression(ctx.expression());
+        verifyType(visitExpression(ctx.expression()), PrimitiveType.BOOLEAN, ctx);
         Label endLabel = new Label();
         if (ctx.elsePart() == null) {
             mv.visitJumpInsn(IFEQ, endLabel);
@@ -314,6 +315,7 @@ public class TranslateVisitor {
         scope.exitLoop();
     }
 
+    //todo fix
     private DataType visitAssignment(AssignmentStatementContext ctx) {
         if (ctx.qualifiedName().expression().isEmpty()) {
             return visitVariableAssignment(ctx);
@@ -326,7 +328,7 @@ public class TranslateVisitor {
         String var = ctx.qualifiedName().ID().getText();
         DataType etype = visitExpression(ctx.expression());
         if (var.equals(scope.getMethodName())) {
-            verifyType(etype, PrimitiveType.INTEGER, ctx);
+            verifyType(etype, PrimitiveType.INTEGER, ctx); // todo check method type
             mv.visitInsn(IRETURN);
         } else if (scope.isLocalVariable(var)) {
             verifyType(etype, scope.getLocalVariableType(var), ctx);
@@ -407,7 +409,8 @@ public class TranslateVisitor {
         return PrimitiveType.INTEGER;
     }
 
-    // халтура: в элемент массива читать нельзя
+    // todo fix
+    // в элемент массива читать нельзя
     private void visitRead(ReadStatementContext ctx) {
         for (TerminalNode id : ctx.ID())
             readIntegerToVariable(id.getText(), ctx);
@@ -451,27 +454,53 @@ public class TranslateVisitor {
     private DataType visitExpression(ExpressionContext ctx) {
         AppTermContext actx = ctx.appTerm(0);
         DataType type = visitAppTerm(actx);
-        if (ctx.CMP_OP() != null) {
-            verifyType(type, PrimitiveType.INTEGER, actx);
+        if (ctx.APP_OP() != null) {
+            String op = ctx.APP_OP().getText();
+            verifyType(type, Utils.isBooleanOperator(op) ? PrimitiveType.BOOLEAN : PrimitiveType.INTEGER, actx);
             actx = ctx.appTerm(1);
-            verifyType(visitAppTerm(actx), PrimitiveType.INTEGER, actx);
-            Label endLabel = new Label();
-            Label falseLabel = new Label();
-            switch (ctx.CMP_OP().getText()) {
-                case ">=": mv.visitJumpInsn(IF_ICMPLT, falseLabel); break;
-                case "<=": mv.visitJumpInsn(IF_ICMPGT, falseLabel); break;
-                case "<>": mv.visitJumpInsn(IF_ICMPEQ, falseLabel); break;
-                case "=": mv.visitJumpInsn(IF_ICMPNE, falseLabel); break;
-                case ">": mv.visitJumpInsn(IF_ICMPLE, falseLabel); break;
-                case "<": mv.visitJumpInsn(IF_ICMPGE, falseLabel); break;
-                default:
-                    throw new CompileException("Unsupported compare operation: " + ctx.getText());
+            verifyType(visitAppTerm(actx), type, actx);
+            if (Utils.isBooleanOperator(op)) {
+              switch (op) {
+                  case "or":
+                      mv.visitInsn(IOR);
+                      break;
+                  case "and":
+                      mv.visitInsn(IAND);
+                      break;
+                  default:
+                      throw new CompileException("Unsupported boolean operation: " + ctx.getText());
+              }
+            } else {
+                Label endLabel = new Label();
+                Label falseLabel = new Label();
+                switch (op) {
+                    case ">=":
+                        mv.visitJumpInsn(IF_ICMPLT, falseLabel);
+                        break;
+                    case "<=":
+                        mv.visitJumpInsn(IF_ICMPGT, falseLabel);
+                        break;
+                    case "<>":
+                        mv.visitJumpInsn(IF_ICMPEQ, falseLabel);
+                        break;
+                    case "=":
+                        mv.visitJumpInsn(IF_ICMPNE, falseLabel);
+                        break;
+                    case ">":
+                        mv.visitJumpInsn(IF_ICMPLE, falseLabel);
+                        break;
+                    case "<":
+                        mv.visitJumpInsn(IF_ICMPGE, falseLabel);
+                        break;
+                    default:
+                        throw new CompileException("Unsupported compare operation: " + ctx.getText());
+                }
+                mv.visitInsn(ICONST_1);
+                mv.visitJumpInsn(GOTO, endLabel);
+                mv.visitLabel(falseLabel);
+                mv.visitInsn(ICONST_0);
+                mv.visitLabel(endLabel);
             }
-            mv.visitInsn(ICONST_1);
-            mv.visitJumpInsn(GOTO, endLabel);
-            mv.visitLabel(falseLabel);
-            mv.visitInsn(ICONST_0);
-            mv.visitLabel(endLabel);
         }
         return type;
     }
@@ -523,9 +552,29 @@ public class TranslateVisitor {
         } else if (ctx.NUMBER() != null) {
             mv.visitLdcInsn(Integer.parseInt(ctx.NUMBER().getText()));
             return PrimitiveType.INTEGER;
+        } else if (ctx.BOOL() != null) {
+            mv.visitInsn("false".equals(ctx.BOOL().getText()) ? ICONST_0 : ICONST_1);
+            return PrimitiveType.BOOLEAN;
+        } else if (ctx.notFactor() != null) {
+            return visitNotFactor(ctx.notFactor());
         } else {
             throw new CompileException("Unsupported expression " + ctx.getText());
         }
+    }
+
+    private DataType visitNotFactor(NotFactorContext ctx) {
+        boolean revert = true;
+        FactorContext fctx = ctx.factor();
+        while (fctx.notFactor() != null) {
+            revert = !revert;
+            fctx = fctx.notFactor().factor();
+        }
+        verifyType(visitFactor(fctx), PrimitiveType.BOOLEAN, ctx);
+        if (revert) {
+            mv.visitInsn(ICONST_1);
+            mv.visitInsn(IXOR);
+        }
+        return PrimitiveType.BOOLEAN;
     }
 
     private DataType visitQualifiedName(QualifiedNameContext ctx) {

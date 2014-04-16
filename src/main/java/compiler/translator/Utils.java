@@ -14,4 +14,8 @@ public class Utils {
         sb.insert(sb.length() - 1, ')');
         return sb.toString();
     }
+
+    public static boolean isBooleanOperator(String op) {
+        return "or".equals(op) || "and".equals(op);
+    }
 }

@@ -6,7 +6,7 @@ import org.objectweb.asm.Type;
  * @author Arkady Rost
  */
 public enum PrimitiveType implements DataType {
-    INTEGER(Type.INT_TYPE);
+    INTEGER(Type.INT_TYPE), BOOLEAN(Type.BOOLEAN_TYPE);
 
     private final Type type;
 

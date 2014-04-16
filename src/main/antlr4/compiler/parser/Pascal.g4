@@ -37,23 +37,28 @@ writeStatement     : 'write' '(' expression (',' expression)* ')' ;
 breakStatement     : 'break' ;
 continueStatement  : 'continue' ;
 
-expression  : appTerm (CMP_OP appTerm)? ;
+expression  : appTerm (APP_OP appTerm)? ;
 appTerm     : SIGN? mulTerm (SIGN mulTerm)* ;
 mulTerm     : factor (MUL_OP factor)* ;
 
 factor      : NUMBER
+            | BOOL
             | qualifiedName
             | functionCall
-            | '(' expression ')' ;
+            | '(' expression ')'
+            | notFactor ;
+
+notFactor   : 'not' factor;
 
 type    : PRIMITIVE_TYPE | 'array' '[' range (',' range)* ']' 'of' PRIMITIVE_TYPE ;
 range   : NUMBER '..' NUMBER ;
-PRIMITIVE_TYPE  : 'integer' ;
+PRIMITIVE_TYPE  : 'integer' | 'boolean';
 
 DIRECTION   : 'to' | 'downto' ;
 SIGN        : '+' | '-' ;
-CMP_OP      : '>=' | '<=' | '=' | '<>' | '>' | '<' ;
+APP_OP      : '>=' | '<=' | '=' | '<>' | '>' | '<' | 'or' | 'and';
 MUL_OP      : '*' | '/' | 'mod';
 ID          : [a-zA-Z][a-zA-Z0-9]* ;
 NUMBER      : [0-9]+ ;
+BOOL        : 'true' | 'false';
 WS          : [ \t\r\n]+ -> skip ;
