@@ -4,6 +4,5 @@ var
  b : boolean;
 begin
     read(i, j);
-    b := (i < j) and (i * i > j) or false;
-    write(b);
+    if (i < j) and (i * i > j) or false then write(i + j) else write(j - i);
 end.

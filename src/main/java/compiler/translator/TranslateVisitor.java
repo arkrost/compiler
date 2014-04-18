@@ -462,9 +462,10 @@ public class TranslateVisitor {
             readValue((PrimitiveType)scope.getLocalVariableType(var));
             mv.visitVarInsn(ISTORE, scope.getLocalVariableIndex(var));
         } else if (scope.isGlobalVariable(var)) {
-            verifyPrimitiveType(scope.getGlobalVariableType(var), ctx);
+            DataType type = scope.getGlobalVariableType(var);
+            verifyPrimitiveType(type, ctx);
             readValue((PrimitiveType)scope.getGlobalVariableType(var));
-            mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, Type.INT_TYPE.getDescriptor());
+            mv.visitFieldInsn(PUTSTATIC, scope.getClassName(), var, type.getType().getDescriptor());
         } else {
             throw new CompileException(String.format("Variable %s not found in context %s", var, ctx));
         }
