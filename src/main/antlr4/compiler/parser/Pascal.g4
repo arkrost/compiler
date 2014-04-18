@@ -36,18 +36,19 @@ writeStatement     : 'write' '(' expression (',' expression)* ')' ;
 breakStatement     : 'break' ;
 continueStatement  : 'continue' ;
 
-expression  : appTerm (APP_OP appTerm)? ;
+expression  : appTerm (APP_OP appTerm)* ;
 appTerm     : SIGN? mulTerm (SIGN mulTerm)* ;
 mulTerm     : factor (MUL_OP factor)* ;
 
 factor      : NUMBER
-            | BOOL
+            | bool
             | qualifiedName
             | functionCall
             | '(' expression ')'
             | notFactor ;
 
 notFactor   : 'not' factor;
+bool        : 'true' | 'false';
 
 type    : PRIMITIVE_TYPE | 'array' '[' range (',' range)* ']' 'of' PRIMITIVE_TYPE ;
 range   : NUMBER '..' NUMBER ;
@@ -59,5 +60,4 @@ APP_OP      : '>=' | '<=' | '=' | '<>' | '>' | '<' | 'or' | 'and';
 MUL_OP      : '*' | '/' | 'mod';
 ID          : [a-zA-Z][a-zA-Z0-9]* ;
 NUMBER      : [0-9]+ ;
-BOOL        : 'true' | 'false';
 WS          : [ \t\r\n]+ -> skip ;

@@ -322,7 +322,7 @@ public class TranslateVisitor {
         Label breakLabel = new Label();
         scope.enterLoop(continueLabel, breakLabel);
         mv.visitLabel(continueLabel);
-        visitExpression(ctx.expression());
+        verifyType(visitExpression(ctx.expression()), PrimitiveType.BOOLEAN, ctx);
         mv.visitJumpInsn(IFEQ, breakLabel);
         visitStatement(ctx.statement());
         mv.visitJumpInsn(GOTO, continueLabel);
@@ -473,8 +473,9 @@ public class TranslateVisitor {
     private void visitWrite(WriteStatementContext ctx) {
        for (ExpressionContext ectx : ctx.expression()) {
            mv.visitFieldInsn(GETSTATIC, Type.getInternalName(System.class), "out", Type.getDescriptor(PrintStream.class));
-           visitExpression(ectx);
-           mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(PrintStream.class), "println", Type.getMethodDescriptor(Type.VOID_TYPE, Type.INT_TYPE), false);
+           DataType type = visitExpression(ectx);
+           verifyPrimitiveType(type, ctx);
+           mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(PrintStream.class), "println", Type.getMethodDescriptor(Type.VOID_TYPE, type.getType()), false);
        }
     }
 
@@ -493,54 +494,56 @@ public class TranslateVisitor {
     private DataType visitExpression(ExpressionContext ctx) {
         AppTermContext actx = ctx.appTerm(0);
         DataType type = visitAppTerm(actx);
-        if (ctx.APP_OP() != null) {
-            String op = ctx.APP_OP().getText();
-            verifyType(type, Utils.isBooleanOperator(op) ? PrimitiveType.BOOLEAN : PrimitiveType.INTEGER, actx);
-            actx = ctx.appTerm(1);
-            verifyType(visitAppTerm(actx), type, actx);
-            if (Utils.isBooleanOperator(op)) {
-                switch (op) {
-                  case "or":
-                      mv.visitInsn(IOR);
-                      break;
-                  case "and":
-                      mv.visitInsn(IAND);
-                      break;
-                  default:
-                      throw new CompileException("Unsupported boolean operation: " + ctx.getText());
+        if (!ctx.APP_OP().isEmpty()) {
+            int i = 1;
+            for (TerminalNode op : ctx.APP_OP()) {
+                verifyType(type, Utils.isBooleanOperator(op.getText()) ? PrimitiveType.BOOLEAN : PrimitiveType.INTEGER, actx);
+                actx = ctx.appTerm(i++);
+                verifyType(visitAppTerm(actx), type, actx);
+                if (Utils.isBooleanOperator(op.getText())) {
+                    switch (op.getText()) {
+                        case "or":
+                            mv.visitInsn(IOR);
+                            break;
+                        case "and":
+                            mv.visitInsn(IAND);
+                            break;
+                        default:
+                            throw new CompileException("Unsupported boolean operation: " + ctx.getText());
+                    }
+                } else {
+                    Label endLabel = new Label();
+                    Label falseLabel = new Label();
+                    switch (op.getText()) {
+                        case ">=":
+                            mv.visitJumpInsn(IF_ICMPLT, falseLabel);
+                            break;
+                        case "<=":
+                            mv.visitJumpInsn(IF_ICMPGT, falseLabel);
+                            break;
+                        case "<>":
+                            mv.visitJumpInsn(IF_ICMPEQ, falseLabel);
+                            break;
+                        case "=":
+                            mv.visitJumpInsn(IF_ICMPNE, falseLabel);
+                            break;
+                        case ">":
+                            mv.visitJumpInsn(IF_ICMPLE, falseLabel);
+                            break;
+                        case "<":
+                            mv.visitJumpInsn(IF_ICMPGE, falseLabel);
+                            break;
+                        default:
+                            throw new CompileException("Unsupported compare operation: " + ctx.getText());
+                    }
+                    mv.visitInsn(ICONST_1);
+                    mv.visitJumpInsn(GOTO, endLabel);
+                    mv.visitLabel(falseLabel);
+                    mv.visitInsn(ICONST_0);
+                    mv.visitLabel(endLabel);
                 }
-            } else {
-                Label endLabel = new Label();
-                Label falseLabel = new Label();
-                switch (op) {
-                    case ">=":
-                        mv.visitJumpInsn(IF_ICMPLT, falseLabel);
-                        break;
-                    case "<=":
-                        mv.visitJumpInsn(IF_ICMPGT, falseLabel);
-                        break;
-                    case "<>":
-                        mv.visitJumpInsn(IF_ICMPEQ, falseLabel);
-                        break;
-                    case "=":
-                        mv.visitJumpInsn(IF_ICMPNE, falseLabel);
-                        break;
-                    case ">":
-                        mv.visitJumpInsn(IF_ICMPLE, falseLabel);
-                        break;
-                    case "<":
-                        mv.visitJumpInsn(IF_ICMPGE, falseLabel);
-                        break;
-                    default:
-                        throw new CompileException("Unsupported compare operation: " + ctx.getText());
-                }
-                mv.visitInsn(ICONST_1);
-                mv.visitJumpInsn(GOTO, endLabel);
-                mv.visitLabel(falseLabel);
-                mv.visitInsn(ICONST_0);
-                mv.visitLabel(endLabel);
+                type = PrimitiveType.BOOLEAN;
             }
-            return PrimitiveType.BOOLEAN;
         }
         return type;
     }
@@ -593,8 +596,8 @@ public class TranslateVisitor {
         } else if (ctx.NUMBER() != null) {
             mv.visitLdcInsn(Integer.parseInt(ctx.NUMBER().getText()));
             return PrimitiveType.INTEGER;
-        } else if (ctx.BOOL() != null) {
-            mv.visitInsn("false".equals(ctx.BOOL().getText()) ? ICONST_0 : ICONST_1);
+        } else if (ctx.bool() != null) {
+            mv.visitInsn("false".equals(ctx.bool().getText()) ? ICONST_0 : ICONST_1);
             return PrimitiveType.BOOLEAN;
         } else if (ctx.notFactor() != null) {
             return visitNotFactor(ctx.notFactor());
